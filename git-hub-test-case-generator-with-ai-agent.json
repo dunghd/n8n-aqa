@@ -1,0 +1,325 @@
+{
+  "name": "GitHub Test Case Generator with AI Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "150d10d0-ca22-4eb4-9b79-b21f067cab84",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        416,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "owner",
+              "value": "wizeline",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "repo",
+              "value": "AutonomousQAAgent-POC",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "branch",
+              "value": "main",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "646c9196-7640-4171-bd51-ee76d0dd30f3",
+      "name": "Set Repository Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        640,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/branches/{{ $json.branch }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "8b4632a5-09eb-4c17-ab33-79a38f34d660",
+      "name": "Get Branch Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        864,
+        352
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "8iyQGt8qXBNNlcup",
+          "name": "GitHub account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('Set Repository Info').item.json.owner }}/{{ $('Set Repository Info').item.json.repo }}/git/trees/{{ $json.commit.sha }}?recursive=1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "12dc3f2c-389f-4e4f-9f0e-3f6452b1c1ee",
+      "name": "GitHub - Get Repository Tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1088,
+        352
+      ],
+      "credentials": {
+        "githubApi": {
+          "id": "74FBfZyE3yFXYmu7",
+          "name": "GitHub account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract file tree from GitHub API response\nconst treeData = $input.first().json.tree;\nconst owner = $('Set Repository Info').first().json.owner;\nconst repo = $('Set Repository Info').first().json.repo;\nconst branch = $('Set Repository Info').first().json.branch;\n\n// Filter for source files that need tests\nconst sourceExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.go', '.rb', '.php'];\nconst excludePaths = ['test', 'spec', '__tests__', 'tests', 'node_modules', 'dist', 'build', '.git'];\n\nconst sourceFiles = treeData\n  .filter(item => {\n    // Only files (not trees/directories)\n    if (item.type !== 'blob') return false;\n    \n    // Check if file has a source code extension\n    const hasSourceExt = sourceExtensions.some(ext => item.path.endsWith(ext));\n    if (!hasSourceExt) return false;\n    \n    // Exclude test files and certain directories\n    const isExcluded = excludePaths.some(excluded => \n      item.path.toLowerCase().includes(excluded.toLowerCase())\n    );\n    \n    return !isExcluded;\n  })\n  .map(file => ({\n    path: file.path,\n    sha: file.sha,\n    size: file.size,\n    url: file.url\n  }));\n\n// Create a structured file tree for AI context\nconst fileTree = {};\ntreeData.forEach(item => {\n  if (item.type === 'blob') {\n    const parts = item.path.split('/');\n    let current = fileTree;\n    \n    parts.forEach((part, index) => {\n      if (index === parts.length - 1) {\n        current[part] = 'file';\n      } else {\n        current[part] = current[part] || {};\n        current = current[part];\n      }\n    });\n  }\n});\n\nreturn [{\n  json: {\n    owner,\n    repo,\n    branch,\n    totalFiles: treeData.length,\n    sourceFilesCount: sourceFiles.length,\n    sourceFiles: sourceFiles.slice(0, 20), // Limit to first 20 for initial analysis\n    fileTreeStructure: JSON.stringify(fileTree, null, 2),\n    repositoryUrl: `https://github.com/${owner}/${repo}`\n  }\n}];"
+      },
+      "id": "6269bba0-3ed0-4db0-bdd4-5f92e8787433",
+      "name": "Process File Structure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+              "name": "analysisPrompt",
+              "value": "=Repository: {{ $json.repositoryUrl }}\nBranch: {{ $json.branch }}\nTotal Files: {{ $json.totalFiles }}\nSource Files Found: {{ $json.sourceFilesCount }}\n\nFile Structure:\n{{ $json.fileTreeStructure }}\n\nSource Files to Analyze (first 20):\n{{ $json.sourceFiles.map(f => f.path).join('\\n') }}\n\nTask: Analyze this repository structure and generate comprehensive test case recommendations for the source files listed above.\n\nFor each file, provide:\n1. Test file name/path (following common conventions)\n2. Key test scenarios (unit tests)\n3. Edge cases to cover\n4. Required mocks/dependencies\n5. Testing framework recommendation\n\nProvide the output as a structured JSON array with this format:\n[\n  {\n    \"sourceFile\": \"path/to/file.js\",\n    \"testFile\": \"path/to/file.test.js\",\n    \"framework\": \"jest\",\n    \"testScenarios\": [\n      {\n        \"description\": \"Test scenario description\",\n        \"type\": \"unit/integration/edge-case\",\n        \"priority\": \"high/medium/low\"\n      }\n    ],\n    \"mocks\": [\"dependency1\", \"dependency2\"],\n    \"notes\": \"Additional testing notes\"\n  }\n]",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b384a006-ea3c-49ee-a46a-19db542d57f7",
+      "name": "Prepare AI Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.analysisPrompt }}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "id": "72061173-cda0-4a8f-b554-b1863ddb3142",
+      "name": "AI Agent - Generate Test Cases",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [
+        1744,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {}
+      },
+      "id": "e895517c-7ada-4c2f-8e9b-ad3a8d03ed78",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        560
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e506da6c-b3c2-463f-b3b4-3a151991b4c6",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1968,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and format the AI response\nconst aiOutput = $input.first().json.output;\nconst repoInfo = $('Process File Structure').first().json;\n\nlet testCases;\ntry {\n  // Try to parse if it's a JSON string\n  testCases = typeof aiOutput === 'string' ? JSON.parse(aiOutput) : aiOutput;\n} catch (e) {\n  // If parsing fails, try to extract JSON from the response\n  const jsonMatch = aiOutput.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n  if (jsonMatch) {\n    testCases = JSON.parse(jsonMatch[0]);\n  } else {\n    testCases = [];\n  }\n}\n\n// Ensure testCases is an array\nif (!Array.isArray(testCases)) {\n  testCases = [testCases];\n}\n\n// Format the output\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: testCases.length,\n    generatedAt: new Date().toISOString()\n  },\n  testCases: testCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    scenarios: tc.testScenarios || tc.scenarios || [],\n    mocks: tc.mocks || [],\n    notes: tc.notes || '',\n    priority: tc.priority || 'medium'\n  }))\n};\n\nreturn [{ json: formattedOutput }];"
+      },
+      "id": "8261f5e6-06b3-4df3-b5dd-611d4f7e6187",
+      "name": "Format Test Cases",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {
+          "fileName": "=github-test-cases-{{ $json.repository.repo }}-{{ $now.format('yyyy-MM-dd-HHmmss') }}.json"
+        }
+      },
+      "id": "4fcbcf1f-d3c7-4280-81d3-89718b37af37",
+      "name": "Export to JSON File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2176,
+        352
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Set Repository Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Repository Info": {
+      "main": [
+        [
+          {
+            "node": "Get Branch Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Branch Info": {
+      "main": [
+        [
+          {
+            "node": "GitHub - Get Repository Tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub - Get Repository Tree": {
+      "main": [
+        [
+          {
+            "node": "Process File Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process File Structure": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Generate Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Format Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Export to JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "74fa542f-d724-4901-8a5a-39459a9fded3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e19bcd79288ba32d5b00c6bcd097856e2fdca4230440ae71d65e560d4587140f"
+  },
+  "id": "5ThSjB47VE5gPvC3",
+  "tags": []
+}

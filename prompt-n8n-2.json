@@ -1,0 +1,280 @@
+{
+  "name": "GitHub Test Case Generator with AI Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "8c5c4d31-5a3e-4d3a-9f1e-2b3c4d5e6f7a",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "owner",
+              "value": "wizeline"
+            },
+            {
+              "name": "repo",
+              "value": "AutonomousQAAgent-POC"
+            },
+            {
+              "name": "branch",
+              "value": "main"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Set Repository Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/git/trees/{{ $json.branch }}?recursive=1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "name": "GitHub - Get Repository Tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract file tree from GitHub API response\nconst treeData = $input.first().json.tree;\nconst owner = $('Set Repository Info').first().json.owner;\nconst repo = $('Set Repository Info').first().json.repo;\nconst branch = $('Set Repository Info').first().json.branch;\n\n// Filter for source files that need tests\nconst sourceExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.go', '.rb', '.php'];\nconst excludePaths = ['test', 'spec', '__tests__', 'tests', 'node_modules', 'dist', 'build', '.git'];\n\nconst sourceFiles = treeData\n  .filter(item => {\n    // Only files (not trees/directories)\n    if (item.type !== 'blob') return false;\n    \n    // Check if file has a source code extension\n    const hasSourceExt = sourceExtensions.some(ext => item.path.endsWith(ext));\n    if (!hasSourceExt) return false;\n    \n    // Exclude test files and certain directories\n    const isExcluded = excludePaths.some(excluded => \n      item.path.toLowerCase().includes(excluded.toLowerCase())\n    );\n    \n    return !isExcluded;\n  })\n  .map(file => ({\n    path: file.path,\n    sha: file.sha,\n    size: file.size,\n    url: file.url\n  }));\n\n// Create a structured file tree for AI context\nconst fileTree = {};\ntreeData.forEach(item => {\n  if (item.type === 'blob') {\n    const parts = item.path.split('/');\n    let current = fileTree;\n    \n    parts.forEach((part, index) => {\n      if (index === parts.length - 1) {\n        current[part] = 'file';\n      } else {\n        current[part] = current[part] || {};\n        current = current[part];\n      }\n    });\n  }\n});\n\nreturn [{\n  json: {\n    owner,\n    repo,\n    branch,\n    totalFiles: treeData.length,\n    sourceFilesCount: sourceFiles.length,\n    sourceFiles: sourceFiles.slice(0, 20), // Limit to first 20 for initial analysis\n    fileTreeStructure: JSON.stringify(fileTree, null, 2),\n    repositoryUrl: `https://github.com/${owner}/${repo}`\n  }\n}];"
+      },
+      "id": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "name": "Process File Structure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+              "name": "analysisPrompt",
+              "value": "=Repository: {{ $json.repositoryUrl }}\nBranch: {{ $json.branch }}\nTotal Files: {{ $json.totalFiles }}\nSource Files Found: {{ $json.sourceFilesCount }}\n\nFile Structure:\n{{ $json.fileTreeStructure }}\n\nSource Files to Analyze (first 20):\n{{ $json.sourceFiles.map(f => f.path).join('\\n') }}\n\nTask: Analyze this repository structure and generate comprehensive test case recommendations for the source files listed above.\n\nFor each file, provide:\n1. Test file name/path (following common conventions)\n2. Key test scenarios (unit tests)\n3. Edge cases to cover\n4. Required mocks/dependencies\n5. Testing framework recommendation\n\nProvide the output as a structured JSON array with this format:\n[\n  {\n    \"sourceFile\": \"path/to/file.js\",\n    \"testFile\": \"path/to/file.test.js\",\n    \"framework\": \"jest\",\n    \"testScenarios\": [\n      {\n        \"description\": \"Test scenario description\",\n        \"type\": \"unit/integration/edge-case\",\n        \"priority\": \"high/medium/low\"\n      }\n    ],\n    \"mocks\": [\"dependency1\", \"dependency2\"],\n    \"notes\": \"Additional testing notes\"\n  }\n]",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4d5e6f7a-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+      "name": "Prepare AI Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 4000
+        },
+        "promptType": "define",
+        "text": "={{ $json.analysisPrompt }}",
+        "hasOutputParser": true,
+        "outputParser": "n8n-nodes-langchain.outputParserAutofixing"
+      },
+      "id": "5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+      "name": "AI Agent - Generate Test Cases",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {}
+      },
+      "id": "6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1340, 500]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "name": "Auto-fixing Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [1560, 500]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1,
+      "position": [1780, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and format the AI response\nconst aiOutput = $input.first().json.output;\nconst repoInfo = $('Process File Structure').first().json;\n\nlet testCases;\ntry {\n  // Try to parse if it's a JSON string\n  testCases = typeof aiOutput === 'string' ? JSON.parse(aiOutput) : aiOutput;\n} catch (e) {\n  // If parsing fails, try to extract JSON from the response\n  const jsonMatch = aiOutput.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n  if (jsonMatch) {\n    testCases = JSON.parse(jsonMatch[0]);\n  } else {\n    testCases = [];\n  }\n}\n\n// Ensure testCases is an array\nif (!Array.isArray(testCases)) {\n  testCases = [testCases];\n}\n\n// Format the output\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: testCases.length,\n    generatedAt: new Date().toISOString()\n  },\n  testCases: testCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    scenarios: tc.testScenarios || tc.scenarios || [],\n    mocks: tc.mocks || [],\n    notes: tc.notes || '',\n    priority: tc.priority || 'medium'\n  }))\n};\n\nreturn [{ json: formattedOutput }];"
+      },
+      "id": "9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f",
+      "name": "Format Test Cases",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {
+          "fileName": "=github-test-cases-{{ $json.repository.repo }}-{{ $now.format('yyyy-MM-dd-HHmmss') }}.json",
+          "download": true
+        }
+      },
+      "id": "0d1e2f3a-4b5c-6d7e-8f9a-0b1c2d3e4f5a",
+      "name": "Export to JSON File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [1780, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Set Repository Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Repository Info": {
+      "main": [
+        [
+          {
+            "node": "GitHub - Get Repository Tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub - Get Repository Tree": {
+      "main": [
+        [
+          {
+            "node": "Process File Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process File Structure": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Generate Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Format Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Export to JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4a1f8c2e-9b3d-4f7a-a2c6-8e5d1b9f3c7a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "18ae35b1c432393b44b185e7210c719d12580e6c5cfa90c99f6820f0a265f527"
+  },
+  "id": "aBcDeFgH1234567890",
+  "tags": []
+}

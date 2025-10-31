@@ -1,0 +1,356 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "properties": [
+          {
+            "displayName": "repoUrl",
+            "name": "repoUrl",
+            "type": "string",
+            "default": "https://github.com/n8n-io/n8n",
+            "placeholder": "https://github.com/owner/repo"
+          },
+          {
+            "displayName": "branch",
+            "name": "branch",
+            "type": "string",
+            "default": "master",
+            "placeholder": "main or master"
+          }
+        ]
+      },
+      "id": "c8623b03-5188-467a-8d76-e17f40775d7c",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "owner",
+              "value": "={{ $json.repoUrl.split('/')[3] }}"
+            },
+            {
+              "name": "repo",
+              "value": "={{ $json.repoUrl.split('/')[4] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e4f8d5f3-f86a-4d26-ac41-45095d985a10",
+      "name": "Set (Parse URL)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.1,
+      "position": [
+        180,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "gitHub",
+        "resource": "git",
+        "operation": "getTree",
+        "owner": "={{ $node[\"Set (Parse URL)\"].json[\"owner\"] }}",
+        "repository": "={{ $node[\"Set (Parse URL)\"].json[\"repo\"] }}",
+        "treeSha": "={{ $json.branch }}",
+        "options": {
+          "recursive": true
+        }
+      },
+      "id": "9f71c4c1-4122-4a0b-9273-d5d141e6211a",
+      "name": "GitHub (Get File Structure)",
+      "type": "n8n-nodes-base.gitHub",
+      "typeVersion": 3.1,
+      "position": [
+        400,
+        180
+      ],
+      "credentials": {
+        "gitHub": {
+          "id": "YOUR_GITHUB_CREDENTIAL_ID",
+          "name": "YOUR_GITHUB_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "keepOnlySet",
+        "values": {
+          "string": [],
+          "number": [],
+          "boolean": []
+        },
+        "fields": {
+          "values": [
+            {
+              "name": "files",
+              "value": "={{ $json.tree }}"
+            }
+          ]
+        },
+        "options": {
+          "dotNotation": true
+        }
+      },
+      "id": "f5166ac4-b153-488b-821f-c0c59807530e",
+      "name": "Set (Extract Files)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.1,
+      "position": [
+        640,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "fieldName": "files",
+        "options": {}
+      },
+      "id": "4e1a0b66-8798-4720-802c-55b410f9e15f",
+      "name": "Split in Batches (Loop Over Files)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3.1,
+      "position": [
+        860,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.files.path }}",
+              "operation": "endsWith",
+              "value2": ".js"
+            },
+            {
+              "value1": "={{ $json.files.path }}",
+              "operation": "endsWith",
+              "value2": ".py"
+            },
+            {
+              "value1": "={{ $json.files.path }}",
+              "operation": "endsWith",
+              "value2": ".ts"
+            }
+          ]
+        },
+        "combineOperation": "any",
+        "options": {}
+      },
+      "id": "dbd3e71d-5a9e-473d-82d2-8b066df423e5",
+      "name": "Filter (File Type)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1060,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.files.type }}",
+              "operation": "equal",
+              "value2": "blob"
+            },
+            {
+              "value1": "={{ $json.files.path }}",
+              "operation": "notContains",
+              "value2": "node_modules"
+            },
+            {
+              "value1": "={{ $json.files.path }}",
+              "operation": "notContains",
+              "value2": "test"
+            },
+            {
+              "value1": "={{ $json.files.path }}",
+              "operation": "notContains",
+              "value2": "spec"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b3e098a5-d8be-4f6c-829d-648c0840c11d",
+      "name": "Filter (Is Necessary)",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        1260,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "gitHub",
+        "resource": "repository",
+        "operation": "getContents",
+        "owner": "={{ $node[\"Set (Parse URL)\"].json[\"owner\"] }}",
+        "repository": "={{ $node[\"Set (Parse URL)\"].json[\"repo\"] }}",
+        "path": "={{ $json.files.path }}",
+        "ref": "={{ $node[\"Start\"].json[\"branch\"] }}",
+        "options": {}
+      },
+      "id": "063c5a3d-425b-4395-8850-8b01e30953ee",
+      "name": "GitHub (Get File Content)",
+      "type": "n8n-nodes-base.gitHub",
+      "typeVersion": 3.1,
+      "position": [
+        1480,
+        180
+      ],
+      "credentials": {
+        "gitHub": {
+          "id": "YOUR_GITHUB_CREDENTIAL_ID",
+          "name": "YOUR_GITHUB_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $item.json;\n\n// Decode the Base64 content\nitem.decodedContent = Buffer.from(item.content, 'base64').toString('utf8');\n\n// Keep the original path for context\nitem.filePath = item.path;\n\nreturn item;"
+      },
+      "id": "1831885f-8367-4d6d-9610-333068f074d0",
+      "name": "Code (Decode Content)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "openAi",
+        "model": "gpt-4o",
+        "mode": "text",
+        "text": "={{ \n`You are a test generation expert. Based on the following file, generate a complete, ready-to-use unit test file.\n\nFile Path: ${$json.filePath}\n\nFile Content:\n`\n+ $json.decodedContent +\n`\n\n**Task:**\n1.  Analyze the code and identify the functions/classes.\n2.  Write unit tests using the most appropriate framework (e.g., Jest for .js, pytest for .py).\n3.  Include tests for happy paths, sad paths, and edge cases.\n4.  IMPORTANT: Your response must be ONLY the test code. Do not include any explanations like \"Here are your tests...\".`\n}}"
+      },
+      "id": "847250e6-512c-473d-8ab1-2b0f49646b53",
+      "name": "AI Agent (Generate Test Cases)",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1920,
+        180
+      ],
+      "credentials": {
+        "openAi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "YOUR_OPENAI_CREDENTIAL_NAME"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Set (Parse URL)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Set (Parse URL)": {
+      "main": [
+        [
+          {
+            "node": "GitHub (Get File Structure)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub (Get File Structure)": {
+      "main": [
+        [
+          {
+            "node": "Set (Extract Files)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Set (Extract Files)": {
+      "main": [
+        [
+          {
+            "node": "Split in Batches (Loop Over Files)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Split in Batches (Loop Over Files)": {
+      "main": [
+        [
+          {
+            "node": "Filter (File Type)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Filter (File Type)": {
+      "main": [
+        [
+          {
+            "node": "Filter (Is Necessary)",
+            "type": "main"
+          }
+        ],
+        [
+          {
+            "node": "Filter (Is Necessary)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Filter (Is Necessary)": {
+      "main": [
+        [
+          {
+            "node": "GitHub (Get File Content)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub (Get File Content)": {
+      "main": [
+        [
+          {
+            "node": "Code (Decode Content)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Code (Decode Content)": {
+      "main": [
+        [
+          {
+            "node": "AI Agent (Generate Test Cases)",
+            "type": "main"
+"          }
+        ]
+      ]
+    }
+  }
+}

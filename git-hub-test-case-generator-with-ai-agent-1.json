@@ -1,0 +1,280 @@
+{
+  "name": "GitHub Test Case Generator with AI Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d28fdf2c-2002-4614-82d6-30fe9da54b50",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-816, 352]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "owner",
+              "value": "wizeline",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "repo",
+              "value": "wize-space",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "branch",
+              "value": "main",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b6605c14-1d79-4d37-8df1-1d01e69e7bb9",
+      "name": "Set Repository Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-592, 352]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/branches/{{ $json.branch }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "13d2450f-b725-4fa2-854b-1374fb0f2914",
+      "name": "Get Branch Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-368, 352],
+      "credentials": {
+        "githubApi": {
+          "id": "8iyQGt8qXBNNlcup",
+          "name": "GitHub account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('Set Repository Info').item.json.owner }}/{{ $('Set Repository Info').item.json.repo }}/git/trees/{{ $json.commit.sha }}?recursive=1",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "9a491b9a-16cb-4ca4-b180-1198c3ecead0",
+      "name": "GitHub - Get Repository Tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-144, 352],
+      "credentials": {
+        "githubApi": {
+          "id": "74FBfZyE3yFXYmu7",
+          "name": "GitHub account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract file tree from GitHub API response\nconst treeData = $input.first().json.tree;\nconst owner = $('Set Repository Info').first().json.owner;\nconst repo = $('Set Repository Info').first().json.repo;\nconst branch = $('Set Repository Info').first().json.branch;\n\n// Define testable file extensions by language/framework\nconst testableExtensions = {\n  // JavaScript/TypeScript\n  javascript: ['.js', '.jsx', '.mjs', '.cjs'],\n  typescript: ['.ts', '.tsx'],\n  // Python\n  python: ['.py'],\n  // Java/Kotlin\n  java: ['.java', '.kt', '.kts'],\n  // C#/.NET\n  csharp: ['.cs'],\n  // Go\n  go: ['.go'],\n  // Ruby\n  ruby: ['.rb'],\n  // PHP\n  php: ['.php'],\n  // Rust\n  rust: ['.rs'],\n  // Swift\n  swift: ['.swift'],\n  // C/C++\n  cpp: ['.c', '.cpp', '.cc', '.cxx', '.h', '.hpp'],\n  // Scala\n  scala: ['.scala'],\n  // Other\n  vue: ['.vue'],\n  svelte: ['.svelte']\n};\n\n// Flatten all testable extensions\nconst allTestableExtensions = Object.values(testableExtensions).flat();\n\n// Define paths/patterns to exclude\nconst excludePaths = [\n  'test', 'tests', '__tests__', 'spec', 'specs',\n  'node_modules', 'vendor', 'dist', 'build', 'out',\n  '.git', '.github', '.vscode', '.idea',\n  'coverage', 'docs', 'documentation',\n  'examples', 'demo', 'samples'\n];\n\n// Define filename patterns to exclude (config, setup files, etc.)\nconst excludeFilenames = [\n  'jest.config', 'webpack.config', 'babel.config',\n  'tsconfig', 'eslint', 'prettier',\n  '.test.', '.spec.', '_test.', '_spec.',\n  'test.', 'spec.', 'mock', 'fixture'\n];\n\nconst sourceFiles = treeData\n  .filter(item => {\n    // Only files (not trees/directories)\n    if (item.type !== 'blob') return false;\n    \n    const path = item.path.toLowerCase();\n    const filename = path.split('/').pop();\n    \n    // Check if file has a testable extension\n    const hasTestableExt = allTestableExtensions.some(ext => \n      item.path.endsWith(ext)\n    );\n    if (!hasTestableExt) return false;\n    \n    // Exclude test files and certain directories\n    const isInExcludedPath = excludePaths.some(excluded => \n      path.includes('/' + excluded.toLowerCase() + '/') || \n      path.startsWith(excluded.toLowerCase() + '/')\n    );\n    if (isInExcludedPath) return false;\n    \n    // Exclude files with test/config patterns in filename\n    const hasExcludedPattern = excludeFilenames.some(pattern => \n      filename.includes(pattern.toLowerCase())\n    );\n    if (hasExcludedPattern) return false;\n    \n    // Exclude very large files (>500KB) as they might be generated/minified\n    if (item.size && item.size > 500000) return false;\n    \n    return true;\n  })\n  .map(file => {\n    // Detect file language based on extension\n    let language = 'unknown';\n    for (const [lang, exts] of Object.entries(testableExtensions)) {\n      if (exts.some(ext => file.path.endsWith(ext))) {\n        language = lang;\n        break;\n      }\n    }\n    \n    return {\n      path: file.path,\n      sha: file.sha,\n      size: file.size,\n      url: file.url,\n      language: language\n    };\n  });\n\n// Create a structured file tree for AI context\nconst fileTree = {};\ntreeData.forEach(item => {\n  if (item.type === 'blob') {\n    const parts = item.path.split('/');\n    let current = fileTree;\n    \n    parts.forEach((part, index) => {\n      if (index === parts.length - 1) {\n        current[part] = 'file';\n      } else {\n        current[part] = current[part] || {};\n        current = current[part];\n      }\n    });\n  }\n});\n\n// Group files by language for better organization\nconst filesByLanguage = sourceFiles.reduce((acc, file) => {\n  if (!acc[file.language]) {\n    acc[file.language] = [];\n  }\n  acc[file.language].push(file);\n  return acc;\n}, {});\n\n// Get statistics by language\nconst languageStats = Object.entries(filesByLanguage).map(([lang, files]) => ({\n  language: lang,\n  count: files.length,\n  totalSize: files.reduce((sum, f) => sum + (f.size || 0), 0)\n}));\n\nreturn [{\n  json: {\n    owner,\n    repo,\n    branch,\n    totalFiles: treeData.length,\n    sourceFilesCount: sourceFiles.length,\n    sourceFiles: sourceFiles.slice(0, 30), // Limit to first 30 for initial analysis\n    filesByLanguage: filesByLanguage,\n    languageStats: languageStats,\n    fileTreeStructure: JSON.stringify(fileTree, null, 2),\n    repositoryUrl: `https://github.com/${owner}/${repo}`,\n    filteringSummary: {\n      totalFilesScanned: treeData.length,\n      testableFilesFound: sourceFiles.length,\n      filesExcluded: treeData.length - sourceFiles.length,\n      supportedExtensions: allTestableExtensions.length,\n      excludedPaths: excludePaths,\n      excludedPatterns: excludeFilenames\n    }\n  }\n}];"
+      },
+      "id": "b5d07e65-43a6-4ae1-982d-8267d8d4b6bc",
+      "name": "Process File Structure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [80, 352]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+              "name": "analysisPrompt",
+              "value": "=Repository: {{ $json.repositoryUrl }}\nBranch: {{ $json.branch }}\n\nFiltering Summary:\n- Total Files Scanned: {{ $json.filteringSummary.totalFilesScanned }}\n- Testable Files Found: {{ $json.filteringSummary.testableFilesFound }}\n- Files Excluded: {{ $json.filteringSummary.filesExcluded }}\n\nLanguage Distribution:\n{{ $json.languageStats.map(s => `- ${s.language}: ${s.count} files`).join('\\n') }}\n\nFile Structure:\n{{ $json.fileTreeStructure }}\n\nSource Files to Analyze (first 30):\n{{ $json.sourceFiles.map(f => `${f.path} [${f.language}]`).join('\\n') }}\n\nTask: Analyze this repository structure and generate comprehensive test case recommendations for the source files listed above.\n\nFor each file, provide:\n1. Test file name/path (following common conventions for the detected language)\n2. Key test scenarios (unit tests)\n3. Edge cases to cover\n4. Required mocks/dependencies\n5. Testing framework recommendation (based on the language detected)\n\nIMPORTANT: Return ONLY a valid JSON array, with no additional text, explanations, or markdown formatting. Do not wrap the JSON in code blocks or backticks.\n\nExpected JSON format:\n[\n  {\n    \"sourceFile\": \"path/to/file.js\",\n    \"language\": \"javascript\",\n    \"testFile\": \"path/to/file.test.js\",\n    \"framework\": \"jest\",\n    \"testScenarios\": [\n      {\n        \"description\": \"Test scenario description\",\n        \"type\": \"unit\",\n        \"priority\": \"high\"\n      }\n    ],\n    \"mocks\": [\"dependency1\", \"dependency2\"],\n    \"notes\": \"Additional testing notes\"\n  }\n]\n\nReturn the JSON array now:",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d125682f-a25d-4652-8b31-428c9ca706d0",
+      "name": "Prepare AI Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [304, 352]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.analysisPrompt }}",
+        "options": {}
+      },
+      "id": "57c8cffb-dc0a-4fcd-9218-1ac52cb3567e",
+      "name": "AI Agent - Generate Test Cases",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [528, 352]
+    },
+    {
+      "parameters": {
+        "model": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "08b7555a-7e5f-4b49-8a96-c784428a5d85",
+      "name": "AWS Bedrock Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAwsBedrock",
+      "typeVersion": 1,
+      "position": [528, 560],
+      "credentials": {
+        "aws": {
+          "id": "bYwD2zosP6YYHz0J",
+          "name": "AWS account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and format the AI response\nconst aiOutput = $input.first().json.output;\nconst repoInfo = $('Process File Structure').first().json;\n\nlet testCases;\ntry {\n  // Try to parse if it's a JSON string\n  testCases = typeof aiOutput === 'string' ? JSON.parse(aiOutput) : aiOutput;\n} catch (e) {\n  // If parsing fails, try to extract JSON from the response\n  const jsonMatch = aiOutput.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n  if (jsonMatch) {\n    testCases = JSON.parse(jsonMatch[0]);\n  } else {\n    testCases = [];\n  }\n}\n\n// Ensure testCases is an array\nif (!Array.isArray(testCases)) {\n  testCases = [testCases];\n}\n\n// Format the output\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: testCases.length,\n    generatedAt: new Date().toISOString()\n  },\n  testCases: testCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    scenarios: tc.testScenarios || tc.scenarios || [],\n    mocks: tc.mocks || [],\n    notes: tc.notes || '',\n    priority: tc.priority || 'medium'\n  }))\n};\n\nreturn [{ json: formattedOutput }];"
+      },
+      "id": "48f6e077-e91f-47a4-85eb-f28747fecf7b",
+      "name": "Format Test Cases",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [752, 352]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {
+          "fileName": "=github-test-cases-{{ $json.repository.repo }}-{{ $now.format('yyyy-MM-dd-HHmmss') }}.json"
+        }
+      },
+      "id": "4a0b7d29-daf4-410f-9426-d43aecca0b5b",
+      "name": "Export to JSON File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [960, 352]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Set Repository Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Repository Info": {
+      "main": [
+        [
+          {
+            "node": "Get Branch Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Branch Info": {
+      "main": [
+        [
+          {
+            "node": "GitHub - Get Repository Tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GitHub - Get Repository Tree": {
+      "main": [
+        [
+          {
+            "node": "Process File Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process File Structure": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Generate Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Format Test Cases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AWS Bedrock Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Generate Test Cases",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Test Cases": {
+      "main": [
+        [
+          {
+            "node": "Export to JSON File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f15e8934-3e08-404e-b3fe-5637c5b285e9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e19bcd79288ba32d5b00c6bcd097856e2fdca4230440ae71d65e560d4587140f"
+  },
+  "id": "5ThSjB47VE5gPvC3",
+  "tags": []
+}

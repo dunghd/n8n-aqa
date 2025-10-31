@@ -1,0 +1,127 @@
+[
+  {
+    "repository": {
+      "owner": "wizeline",
+      "repo": "wize-space",
+      "branch": "main",
+      "url": "https://github.com/wizeline/wize-space"
+    },
+    "summary": {
+      "totalSourceFiles": 470,
+      "filesAnalyzed": 5,
+      "generatedAt": "2025-10-30T10:22:22.413Z"
+    },
+    "testCases": [
+      {
+        "id": 1,
+        "sourceFile": "apps/booking-api/src/app.ts",
+        "testFile": "apps/booking-api/src/__tests__/app.test.ts",
+        "framework": "jest",
+        "scenarios": [
+          {
+            "description": "Should initialize Express app with all middleware",
+            "type": "unit",
+            "priority": "high"
+          },
+          {
+            "description": "Should handle errors properly",
+            "type": "unit",
+            "priority": "high"
+          }
+        ],
+        "mocks": ["express", "passport", "endpoints", "errorHandler"],
+        "notes": "Focus on middleware setup and error handling",
+        "priority": "medium"
+      },
+      {
+        "id": 2,
+        "sourceFile": "apps/booking-api/src/clients/cache/index.ts",
+        "testFile": "apps/booking-api/src/clients/cache/__tests__/cache.test.ts",
+        "framework": "jest",
+        "scenarios": [
+          {
+            "description": "Should set and get cached values correctly",
+            "type": "unit",
+            "priority": "high"
+          },
+          {
+            "description": "Should handle cache misses",
+            "type": "unit",
+            "priority": "medium"
+          }
+        ],
+        "mocks": ["redis", "cache-client"],
+        "notes": "Test cache operations and error scenarios",
+        "priority": "medium"
+      },
+      {
+        "id": 3,
+        "sourceFile": "apps/booking-api/src/clients/google-auth/index.ts",
+        "testFile": "apps/booking-api/src/clients/google-auth/__tests__/google-auth.test.ts",
+        "framework": "jest",
+        "scenarios": [
+          {
+            "description": "Should verify Google tokens successfully",
+            "type": "unit",
+            "priority": "high"
+          },
+          {
+            "description": "Should handle invalid tokens",
+            "type": "unit",
+            "priority": "high"
+          }
+        ],
+        "mocks": ["google-auth-library", "OAuth2Client"],
+        "notes": "Test token verification and error cases",
+        "priority": "medium"
+      },
+      {
+        "id": 4,
+        "sourceFile": "apps/booking-api/src/endpoints/authentication/controller.ts",
+        "testFile": "apps/booking-api/src/endpoints/authentication/__tests__/controller.test.ts",
+        "framework": "jest",
+        "scenarios": [
+          {
+            "description": "Should authenticate user successfully",
+            "type": "unit",
+            "priority": "high"
+          },
+          {
+            "description": "Should handle authentication failures",
+            "type": "unit",
+            "priority": "high"
+          }
+        ],
+        "mocks": [
+          "passport",
+          "authService",
+          "express.Request",
+          "express.Response"
+        ],
+        "notes": "Test authentication flows and error handling",
+        "priority": "medium"
+      },
+      {
+        "id": 5,
+        "sourceFile": "apps/booking-api/src/endpoints/authentication/service.ts",
+        "testFile": "apps/booking-api/src/endpoints/authentication/__tests__/service.test.ts",
+        "framework": "jest",
+        "scenarios": [
+          {
+            "description": "Should validate user credentials",
+            "type": "unit",
+            "priority": "high"
+          },
+          {
+            "description": "Should generate authentication tokens",
+            "type": "unit",
+            "priority": "high"
+          }
+        ],
+        "mocks": ["database", "jwt", "bcrypt"],
+        "notes": "Test credential validation and token generation",
+        "priority": "medium"
+      }
+    ]
+  }
+]
