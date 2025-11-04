@@ -191,7 +191,7 @@
             {
               "id": "individual-prompt",
               "name": "prompt",
-              "value": "=File: {{ $json.filePath }}\nLanguage: {{ $json.language }}\nSize: {{ $json.size }} bytes\n\nFile Content:\n```\n{{ $json.content }}\n```\n\nTask: Analyze this specific file and generate comprehensive test cases.\n\nProvide:\n1. Test file name/path (following {{ $json.language }} conventions)\n2. Detailed unit test scenarios based on the actual code\n3. Edge cases specific to this implementation\n4. Required mocks/dependencies\n5. Testing framework recommendation\n6. Suggested test structure\n\nIMPORTANT: Return ONLY valid JSON, no markdown or explanations.\n\nFormat:\n{\n  \"sourceFile\": \"{{ $json.filePath }}\",\n  \"language\": \"{{ $json.language }}\",\n  \"testFile\": \"path/to/test/file\",\n  \"framework\": \"recommended-framework\",\n  \"testScenarios\": [\n    {\n      \"description\": \"Test description\",\n      \"type\": \"unit|integration|edge-case\",\n      \"priority\": \"high|medium|low\",\n      \"testCode\": \"Sample test code structure\"\n    }\n  ],\n  \"mocks\": [\"dependency1\"],\n  \"setup\": \"Setup instructions\",\n  \"notes\": \"Additional notes\"\n}",
+              "value": "=File: {{ $json.filePath }}\nLanguage: {{ $json.language }}\nSize: {{ $json.size }} bytes\n\nFile Content:\n```{{ $json.language }}\n{{ $json.content }}\n```\n\nTask: Generate COMPLETE, EXECUTABLE unit tests for this file. The tests must be production-ready code that can run immediately.\n\nRequirements:\n1. Analyze all functions, classes, and exports in the source file\n2. Generate FULL test code with proper imports, setup, and teardown\n3. Cover happy paths, edge cases, error handling, and boundary conditions\n4. Use appropriate testing framework for {{ $json.language }}\n5. Include necessary mocks for external dependencies\n6. Write tests that actually validate the logic in the source code\n7. Generate COMPLETE test file content - no placeholders or comments like \"add more tests\"\n\nIMPORTANT: Return ONLY valid JSON, no markdown or explanations.\n\nFormat:\n{\n  \"sourceFile\": \"{{ $json.filePath }}\",\n  \"language\": \"{{ $json.language }}\",\n  \"testFile\": \"path/to/test/file\",\n  \"framework\": \"jest|mocha|pytest|junit|etc\",\n  \"testFileContent\": \"COMPLETE executable test code with all imports and test cases\",\n  \"dependencies\": [\"testing-library\", \"mock-library\"],\n  \"coverage\": {\n    \"functions\": [\"function1\", \"function2\"],\n    \"scenarios\": [\"happy path\", \"error cases\", \"edge cases\"]\n  },\n  \"runCommand\": \"command to execute tests\",\n  \"notes\": \"Setup instructions if needed\"\n}",
               "type": "string"
             }
           ]
@@ -244,7 +244,7 @@
             {
               "id": "batch-prompt",
               "name": "batchPrompt",
-              "value": "=Batch {{ $json.batchNumber }}/{{ $json.totalBatches }}\nRepository: {{ $json.owner }}/{{ $json.repo }}\n\nFiles in this batch:\n{{ $json.files.map(f => `- ${f.path} [${f.language}]`).join('\\n') }}\n\nTask: Generate test case recommendations for these {{ $json.files.length }} files.\n\nFor each file, provide:\n1. Test file path\n2. Key test scenarios\n3. Testing framework\n4. Priority level\n\nIMPORTANT: Return ONLY a valid JSON array.\n\nFormat:\n[\n  {\n    \"sourceFile\": \"path/to/file\",\n    \"language\": \"language\",\n    \"testFile\": \"path/to/test\",\n    \"framework\": \"framework-name\",\n    \"testScenarios\": [\n      {\n        \"description\": \"Test description\",\n        \"type\": \"unit\",\n        \"priority\": \"high\"\n      }\n    ],\n    \"mocks\": [],\n    \"notes\": \"\"\n  }\n]",
+              "value": "=Batch {{ $json.batchNumber }}/{{ $json.totalBatches }}\nRepository: {{ $json.owner }}/{{ $json.repo }}\n\nFiles in this batch:\n{{ $json.files.map(f => `- ${f.path} [${f.language}] (${f.size} bytes)`).join('\\n') }}\n\nTask: Generate COMPLETE, EXECUTABLE unit tests for each file. The tests must be production-ready code that can run immediately.\n\nFor each file:\n1. Infer the likely content and structure based on the file path and language\n2. Generate FULL test code with proper imports, setup, and teardown\n3. Cover common scenarios for files of this type\n4. Use appropriate testing framework\n5. Include necessary mocks\n6. Write COMPLETE test file content - no placeholders\n\nIMPORTANT: Return ONLY a valid JSON array with complete test code.\n\nFormat:\n[\n  {\n    \"sourceFile\": \"path/to/file\",\n    \"language\": \"language\",\n    \"testFile\": \"path/to/test/file\",\n    \"framework\": \"jest|pytest|junit|etc\",\n    \"testFileContent\": \"COMPLETE executable test code\",\n    \"dependencies\": [\"test-deps\"],\n    \"coverage\": {\n      \"functions\": [\"assumed functions\"],\n      \"scenarios\": [\"scenarios covered\"]\n    },\n    \"runCommand\": \"command to run tests\",\n    \"notes\": \"Any setup notes\"\n  }\n]",
               "type": "string"
             }
           ]
@@ -271,7 +271,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse and aggregate batch results\nconst items = $input.all();\nconst repoInfo = $('Process File Structure').first().json;\n\nlet allTestCases = [];\n\nitems.forEach(item => {\n  const output = item.json.output;\n  \n  let testCases;\n  try {\n    testCases = typeof output === 'string' ? JSON.parse(output) : output;\n  } catch (e) {\n    const jsonMatch = output.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n    if (jsonMatch) {\n      testCases = JSON.parse(jsonMatch[0]);\n    } else {\n      testCases = [];\n    }\n  }\n  \n  if (!Array.isArray(testCases)) {\n    testCases = [testCases];\n  }\n  \n  allTestCases = allTestCases.concat(testCases);\n});\n\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  processingMode: repoInfo.processingMode,\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: allTestCases.length,\n    generatedAt: new Date().toISOString(),\n    batchesProcessed: items.length\n  },\n  testCases: allTestCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    language: tc.language,\n    scenarios: tc.testScenarios || tc.scenarios || [],\n    mocks: tc.mocks || [],\n    notes: tc.notes || '',\n    priority: tc.priority || 'medium',\n    setup: tc.setup || '',\n    testCode: tc.testCode || ''\n  }))\n};\n\nreturn [{ json: formattedOutput }];"
+        "jsCode": "// Parse and aggregate batch results\nconst items = $input.all();\nconst repoInfo = $('Process File Structure').first().json;\n\nlet allTestCases = [];\n\nitems.forEach(item => {\n  const output = item.json.output;\n  \n  let testCases;\n  try {\n    testCases = typeof output === 'string' ? JSON.parse(output) : output;\n  } catch (e) {\n    const jsonMatch = output.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n    if (jsonMatch) {\n      testCases = JSON.parse(jsonMatch[0]);\n    } else {\n      testCases = [];\n    }\n  }\n  \n  if (!Array.isArray(testCases)) {\n    testCases = [testCases];\n  }\n  \n  allTestCases = allTestCases.concat(testCases);\n});\n\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  processingMode: repoInfo.processingMode,\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: allTestCases.length,\n    generatedAt: new Date().toISOString(),\n    batchesProcessed: items.length\n  },\n  testFiles: allTestCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    language: tc.language,\n    testFileContent: tc.testFileContent || '',\n    dependencies: tc.dependencies || [],\n    coverage: tc.coverage || {},\n    runCommand: tc.runCommand || '',\n    notes: tc.notes || ''\n  }))\n};\n\nreturn [{ json: formattedOutput }];"
       },
       "id": "51609c08-284d-4caa-bd89-8e4c0858dbe2",
       "name": "Format Final Output",
@@ -291,6 +291,51 @@
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
       "position": [1008, -16]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "testFiles",
+        "options": {}
+      },
+      "id": "f1e2d3c4-b5a6-7c8d-9e0f-1a2b3c4d5e6f",
+      "name": "Split Test Files",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1008, 192]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {
+          "fileName": "={{ $json.testFile }}",
+          "mimeType": "text/plain"
+        }
+      },
+      "id": "a1b2c3d4-e5f6-7g8h-9i0j-k1l2m3n4o5p6",
+      "name": "Create Test File",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [1232, 192]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "data",
+              "value": "={{ $json.testFileContent }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6g7-h8i9-j0k1-l2m3n4o5p6q7",
+      "name": "Prepare Test File Content",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1232, 304]
     },
     {
       "parameters": {
@@ -510,6 +555,33 @@
         [
           {
             "node": "Export to JSON File",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Test Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Test Files": {
+      "main": [
+        [
+          {
+            "node": "Prepare Test File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Test File Content": {
+      "main": [
+        [
+          {
+            "node": "Create Test File",
             "type": "main",
             "index": 0
           }
