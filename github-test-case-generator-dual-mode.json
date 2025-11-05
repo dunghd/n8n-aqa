@@ -294,6 +294,16 @@
     },
     {
       "parameters": {
+        "jsCode": "// Attach repository context to each testFile entry\nconst formatted = $input.first().json;\nconst repo = formatted.repository || {};\nconst testFiles = formatted.testFiles || [];\nconst enriched = testFiles.map(tf => ({ ...tf, owner: tf.owner || repo.owner, repo: tf.repo || repo.repo, branch: tf.branch || repo.branch }));\nreturn [{ json: { testFiles: enriched } }];"
+      },
+      "id": "h1i2j3k4-l5m6-n7o8-p9q0-r1s2t3u4v5w6",
+      "name": "Attach Repo Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 160]
+    },
+    {
+      "parameters": {
         "fieldToSplitOut": "testFiles",
         "options": {}
       },
@@ -307,7 +317,7 @@
       "parameters": {
         "operation": "text",
         "options": {
-          "fileName": "={{ $json.testFile }}",
+          "fileName": "={{ $json.localFileName || $json.testFile }}",
           "mimeType": "text/plain"
         }
       },
@@ -336,6 +346,39 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [1232, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare commit payload for GitHub\nconst item = $input.first().json || {};\nconst content = item.testFileContent || item.data || '';\n\n// Get original source filename\nconst sourceFile = item.sourceFile || '';\nlet baseFileName = '';\nif (sourceFile) {\n  const pathParts = sourceFile.split('/');\n  baseFileName = pathParts[pathParts.length - 1];\n  // Remove extension and add test suffix\n  const dotIndex = baseFileName.lastIndexOf('.');\n  if (dotIndex > 0) {\n    const nameWithoutExt = baseFileName.substring(0, dotIndex);\n    const ext = baseFileName.substring(dotIndex);\n    baseFileName = `${nameWithoutExt}.test${ext}`;\n  } else {\n    baseFileName = `${baseFileName}.test`;\n  }\n} else {\n  baseFileName = `generated_test_${Date.now()}.js`;\n}\n\n// Build target path under tests/auto-generated\nconst targetPath = item.testFile || `tests/auto-generated/${baseFileName}`;\n\n// Base64 encode the content\nconst contentBase64 = Buffer.from(content, 'utf8').toString('base64');\n\n// Get owner/repo/branch from item or Configuration node\nlet owner = item.owner || (item.repository && item.repository.owner) || undefined;\nlet repo = item.repo || (item.repository && item.repository.repo) || undefined;\nlet branch = item.branch || (item.repository && item.repository.branch) || undefined;\ntry {\n  const cfg = $('Configuration').first().json || {};\n  owner = owner || cfg.owner || 'unknown-owner';\n  repo = repo || cfg.repo || 'unknown-repo';\n  branch = branch || cfg.branch || 'main';\n} catch (e) {\n  owner = owner || 'unknown-owner';\n  repo = repo || 'unknown-repo';\n  branch = branch || 'main';\n}\n\n// Extract filename for commit message and local export\nconst pathParts = targetPath.split('/');\nconst localFileName = pathParts[pathParts.length - 1];\nconst commitMessage = `chore(tests): add auto-generated test for ${sourceFile || localFileName}`;\n\n// Return data for both GitHub commit and local file creation\nreturn [{ json: { owner, repo, branch, targetPath, contentBase64, commitMessage, testFile: item.testFile, testFileContent: content, data: content, localFileName } }];"
+      },
+      "id": "g1h2i3j4-k5l6-m7n8-o9p0-q1r2s3t4u5v6",
+      "name": "Prepare Git Commit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1472, 304]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/{{ $json.targetPath }}",
+        "method": "PUT",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json.commitMessage, content: $json.contentBase64, branch: $json.branch }) }}",
+        "options": {}
+      },
+      "id": "z9y8x7w6-v5u4-t3s2-r1q0-p9o8n7m6l5k4",
+      "name": "Create/Update File on GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1712, 304],
+      "credentials": {
+        "githubApi": {
+          "id": "74FBfZyE3yFXYmu7",
+          "name": "GitHub account 5"
+        }
+      }
     },
     {
       "parameters": {
@@ -559,7 +602,7 @@
             "index": 0
           },
           {
-            "node": "Split Test Files",
+            "node": "Attach Repo Context",
             "type": "main",
             "index": 0
           }
@@ -577,7 +620,40 @@
         ]
       ]
     },
+    "Attach Repo Context": {
+      "main": [
+        [
+          {
+            "node": "Split Test Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Prepare Test File Content": {
+      "main": [
+        [
+          {
+            "node": "Prepare Git Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Git Commit": {
+      "main": [
+        [
+          {
+            "node": "Create/Update File on GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create/Update File on GitHub": {
       "main": [
         [
           {
