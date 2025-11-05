@@ -54,6 +54,12 @@
               "name": "maxFilesToProcess",
               "value": 50,
               "type": "number"
+            },
+            {
+              "id": "8",
+              "name": "testBranch",
+              "value": "auto-generated-tests",
+              "type": "string"
             }
           ]
         },
@@ -64,7 +70,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [-1680, -16],
-      "notes": "Set processingMode to:\n- 'batch' for faster batch processing\n- 'individual' for detailed file-by-file analysis\n\nSet fetchFileContent to true to get actual code content\nAdjust maxFilesToProcess and batchSize as needed"
+      "notes": "Set processingMode to:\n- 'batch' for faster batch processing\n- 'individual' for detailed file-by-file analysis\n\nSet fetchFileContent to true to get actual code content\nAdjust maxFilesToProcess and batchSize as needed\ntestBranch: branch name for auto-generated test commits"
     },
     {
       "parameters": {
@@ -359,6 +365,162 @@
     },
     {
       "parameters": {
+        "jsCode": "// Preserve commit data and prepare for branch check\nconst commitData = $input.first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    ...commitData,\n    testBranch: config.testBranch,\n    checkBranchUrl: `https://api.github.com/repos/${commitData.owner}/${commitData.repo}/branches/${config.testBranch}`\n  }\n}];"
+      },
+      "id": "preserve-commit-data-001",
+      "name": "Preserve Commit Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1696, 304]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.checkBranchUrl }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {
+          "allowUnauthorizedCerts": false,
+          "ignoreResponseCode": true
+        }
+      },
+      "id": "check-branch-exists-001",
+      "name": "Check If Test Branch Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 304],
+      "credentials": {
+        "githubApi": {
+          "id": "74FBfZyE3yFXYmu7",
+          "name": "GitHub account 5"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the branch check result with commit data\nconst branchCheckResult = $input.first().json;\nconst commitData = $('Preserve Commit Data').first().json;\n\n// Check if the request failed (error property exists) or succeeded\nconst hasError = branchCheckResult.error !== undefined;\nconst statusCode = branchCheckResult.statusCode || (hasError ? 404 : 200);\nconst branchExists = !hasError && statusCode === 200;\n\nreturn [{\n  json: {\n    ...commitData,\n    branchExists: branchExists,\n    statusCode: statusCode\n  }\n}];"
+      },
+      "id": "merge-branch-check-result-001",
+      "name": "Merge Branch Check Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2144, 304]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "branch-exists-check",
+              "leftValue": "={{ $json.branchExists }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "branch-exists-condition-001",
+      "name": "Branch Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2368, 304]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the latest commit SHA from the main branch to create new branch from it\nconst data = $input.first().json;\nconst prepareCommitData = $('Prepare Git Commit').first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    owner: prepareCommitData.owner,\n    repo: prepareCommitData.repo,\n    sourceBranch: config.branch,\n    testBranch: config.testBranch,\n    ...prepareCommitData\n  }\n}];"
+      },
+      "id": "prepare-branch-creation-001",
+      "name": "Prepare Branch Creation Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2592, 192]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/git/ref/heads/{{ $json.sourceBranch }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "get-source-branch-sha-001",
+      "name": "Get Source Branch SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2816, 192],
+      "credentials": {
+        "githubApi": {
+          "id": "74FBfZyE3yFXYmu7",
+          "name": "GitHub account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $('Prepare Branch Creation Data').first().json.owner }}/{{ $('Prepare Branch Creation Data').first().json.repo }}/git/refs",
+        "method": "POST",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ref: 'refs/heads/' + $('Prepare Branch Creation Data').first().json.testBranch, sha: $json.object.sha }) }}",
+        "options": {}
+      },
+      "id": "create-test-branch-001",
+      "name": "Create Test Branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3040, 192],
+      "credentials": {
+        "githubApi": {
+          "id": "74FBfZyE3yFXYmu7",
+          "name": "GitHub account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the branch creation result with the commit data\nconst prepareCommitData = $('Prepare Git Commit').first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    ...prepareCommitData,\n    branch: config.testBranch  // Override branch to use test branch\n  }\n}];"
+      },
+      "id": "merge-branch-data-001",
+      "name": "Set Test Branch for Commit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3264, 192]
+    },
+    {
+      "parameters": {
+        "jsCode": "// For existing branch, just pass through with test branch override\nconst prepareCommitData = $('Preserve Commit Data').first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    ...prepareCommitData,\n    branch: config.testBranch  // Override branch to use test branch\n  }\n}];"
+      },
+      "id": "use-existing-branch-001",
+      "name": "Use Existing Test Branch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2592, 416]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "merge-branch-paths-001",
+      "name": "Merge Branch Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [3488, 304]
+    },
+    {
+      "parameters": {
         "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/{{ $json.targetPath }}",
         "method": "PUT",
         "authentication": "predefinedCredentialType",
@@ -372,7 +534,7 @@
       "name": "Create/Update File on GitHub",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1712, 304],
+      "position": [3712, 304],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -643,6 +805,123 @@
       ]
     },
     "Prepare Git Commit": {
+      "main": [
+        [
+          {
+            "node": "Preserve Commit Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preserve Commit Data": {
+      "main": [
+        [
+          {
+            "node": "Check If Test Branch Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Test Branch Exists": {
+      "main": [
+        [
+          {
+            "node": "Merge Branch Check Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Branch Check Result": {
+      "main": [
+        [
+          {
+            "node": "Branch Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Branch Exists?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Branch Creation Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Use Existing Test Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Branch Creation Data": {
+      "main": [
+        [
+          {
+            "node": "Get Source Branch SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Source Branch SHA": {
+      "main": [
+        [
+          {
+            "node": "Create Test Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Test Branch": {
+      "main": [
+        [
+          {
+            "node": "Set Test Branch for Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Branch for Commit": {
+      "main": [
+        [
+          {
+            "node": "Merge Branch Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Existing Test Branch": {
+      "main": [
+        [
+          {
+            "node": "Merge Branch Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Branch Paths": {
       "main": [
         [
           {
