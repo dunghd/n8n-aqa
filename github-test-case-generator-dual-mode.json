@@ -3,11 +3,11 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "675cf8b8-e05f-4504-8223-01c21d257d69",
+      "id": "db95984c-dc31-4a80-ad19-05384a5a1d26",
       "name": "When clicking 'Test workflow'",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-1280, 336]
+      "position": [-3184, -272]
     },
     {
       "parameters": {
@@ -40,7 +40,7 @@
             {
               "id": "5",
               "name": "batchSize",
-              "value": 5,
+              "value": 10,
               "type": "number"
             },
             {
@@ -52,7 +52,7 @@
             {
               "id": "7",
               "name": "maxFilesToProcess",
-              "value": 5,
+              "value": 10,
               "type": "number"
             },
             {
@@ -60,16 +60,22 @@
               "name": "testBranch",
               "value": "auto-generated-tests",
               "type": "string"
+            },
+            {
+              "id": "9",
+              "name": "excludePatterns",
+              "value": "[\"node_modules\", \".test.\", \"_spec.\", \"__init__\", \"constants\", \"config\"]",
+              "type": "string"
             }
           ]
         },
         "options": {}
       },
-      "id": "54f97ff6-f8c7-44e9-98a3-4e756e2d38b3",
+      "id": "abb6f34e-9ab8-4a11-ae2a-c7e516e1ccb2",
       "name": "Configuration",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [-1056, 336],
+      "position": [-2960, -272],
       "notes": "Set processingMode to:\n- 'batch' for faster batch processing\n- 'individual' for detailed file-by-file analysis\n\nSet fetchFileContent to true to get actual code content\nAdjust maxFilesToProcess and batchSize as needed\ntestBranch: branch name for auto-generated test commits"
     },
     {
@@ -79,11 +85,11 @@
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "72ca4be4-7c28-4614-bf81-02414007747d",
+      "id": "98f7d05d-8608-4389-a3c5-8d0403b1ca70",
       "name": "Get Branch Info",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-832, 336],
+      "position": [-2736, -272],
       "credentials": {
         "githubApi": {
           "id": "8iyQGt8qXBNNlcup",
@@ -98,11 +104,11 @@
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "c9897223-bfab-4965-a094-cdbc935f29e4",
+      "id": "911d5a7a-0ff8-4de7-90d6-04c2f8282d7a",
       "name": "Get Repository Tree",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-608, 336],
+      "position": [-2512, -272],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -114,11 +120,21 @@
       "parameters": {
         "jsCode": "// Extract file tree from GitHub API response\nconst treeData = $input.first().json.tree;\nconst config = $('Configuration').first().json;\nconst owner = config.owner;\nconst repo = config.repo;\nconst branch = config.branch;\nconst maxFiles = config.maxFilesToProcess || 100;\n\n// Define testable file extensions by language/framework\nconst testableExtensions = {\n  javascript: ['.js', '.jsx', '.mjs', '.cjs'],\n  typescript: ['.ts', '.tsx'],\n  python: ['.py'],\n  java: ['.java', '.kt', '.kts'],\n  csharp: ['.cs'],\n  go: ['.go'],\n  ruby: ['.rb'],\n  php: ['.php'],\n  rust: ['.rs'],\n  swift: ['.swift'],\n  cpp: ['.c', '.cpp', '.cc', '.cxx', '.h', '.hpp'],\n  scala: ['.scala'],\n  vue: ['.vue'],\n  svelte: ['.svelte']\n};\n\nconst allTestableExtensions = Object.values(testableExtensions).flat();\n\n// Enhanced exclusion: Paths and directories that contain test files\nconst excludePaths = [\n  'test', 'tests', '__tests__', 'spec', 'specs',\n  '__test__', '__spec__', 'testing',\n  'e2e', 'integration', 'unit',\n  'fixtures', 'mocks', '__mocks__',\n  'node_modules', 'vendor', 'dist', 'build', 'out',\n  '.git', '.github', '.vscode', '.idea',\n  'coverage', 'docs', 'documentation',\n  'examples', 'demo', 'samples'\n];\n\n// Enhanced exclusion: File name patterns commonly used for tests\nconst excludeFilenames = [\n  // Config files\n  'jest.config', 'webpack.config', 'babel.config',\n  'tsconfig', 'eslint', 'prettier', 'vitest.config',\n  'karma.config', 'mocha.config', 'jasmine.config',\n  // Test file patterns - middle of filename\n  '.test.', '.spec.', '_test.', '_spec.',\n  '.tests.', '.specs.', '_tests.', '_specs.',\n  // Test file patterns - start of filename\n  'test.', 'spec.', 'test_', 'spec_',\n  // Test file patterns - end of filename (before extension)\n  'test', 'spec', 'tests', 'specs',\n  // Mock and fixture patterns\n  'mock', 'mocks', '.mock.', '_mock.',\n  'fixture', 'fixtures', '.fixture.', '_fixture.',\n  'stub', 'stubs', '.stub.', '_stub.',\n  // Setup and helper test files\n  'setup', 'testsetup', 'test-setup', 'test_setup',\n  'helper', 'testhelper', 'test-helper', 'test_helper',\n  // Framework-specific patterns\n  'testcase', 'test-case', 'test_case',\n  'unittest', 'unit-test', 'unit_test'\n];\n\nconst sourceFiles = treeData\n  .filter(item => {\n    if (item.type !== 'blob') return false;\n    \n    const path = item.path.toLowerCase();\n    const filename = path.split('/').pop();\n    const filenameWithoutExt = filename.substring(0, filename.lastIndexOf('.')) || filename;\n    \n    // Must have a testable extension\n    const hasTestableExt = allTestableExtensions.some(ext => \n      item.path.endsWith(ext)\n    );\n    if (!hasTestableExt) return false;\n    \n    // Exclude files in test-related directories\n    const isInExcludedPath = excludePaths.some(excluded => \n      path.includes('/' + excluded.toLowerCase() + '/') || \n      path.startsWith(excluded.toLowerCase() + '/')\n    );\n    if (isInExcludedPath) return false;\n    \n    // Exclude files with test-related patterns in filename\n    const hasExcludedPattern = excludeFilenames.some(pattern => \n      filename.includes(pattern.toLowerCase())\n    );\n    if (hasExcludedPattern) return false;\n    \n    // Additional check: filename ends with test/spec pattern (before extension)\n    // e.g., user.test.js, api.spec.ts, myfile_test.py\n    const testSuffixPatterns = ['test', 'spec', 'tests', 'specs'];\n    const endsWithTestPattern = testSuffixPatterns.some(suffix => {\n      // Check if filename (without extension) ends with these patterns\n      return filenameWithoutExt.endsWith('.' + suffix) || \n             filenameWithoutExt.endsWith('_' + suffix) || \n             filenameWithoutExt.endsWith('-' + suffix);\n    });\n    if (endsWithTestPattern) return false;\n    \n    // Additional check: filename starts with test/spec pattern\n    // e.g., test_user.py, spec_api.js\n    const startsWithTestPattern = testSuffixPatterns.some(prefix => {\n      return filenameWithoutExt.startsWith(prefix + '.') || \n             filenameWithoutExt.startsWith(prefix + '_') || \n             filenameWithoutExt.startsWith(prefix + '-');\n    });\n    if (startsWithTestPattern) return false;\n    \n    // Exclude very large files\n    if (item.size && item.size > 500000) return false;\n    \n    return true;\n  })\n  .slice(0, maxFiles)  // Limit based on config\n  .map(file => {\n    let language = 'unknown';\n    for (const [lang, exts] of Object.entries(testableExtensions)) {\n      if (exts.some(ext => file.path.endsWith(ext))) {\n        language = lang;\n        break;\n      }\n    }\n    \n    return {\n      path: file.path,\n      sha: file.sha,\n      size: file.size,\n      url: file.url,\n      language: language,\n      owner: owner,\n      repo: repo,\n      branch: branch\n    };\n  });\n\nconst filesByLanguage = sourceFiles.reduce((acc, file) => {\n  if (!acc[file.language]) {\n    acc[file.language] = [];\n  }\n  acc[file.language].push(file);\n  return acc;\n}, {});\n\nconst languageStats = Object.entries(filesByLanguage).map(([lang, files]) => ({\n  language: lang,\n  count: files.length,\n  totalSize: files.reduce((sum, f) => sum + (f.size || 0), 0)\n}));\n\nreturn [{\n  json: {\n    owner,\n    repo,\n    branch,\n    processingMode: config.processingMode,\n    fetchFileContent: config.fetchFileContent,\n    batchSize: config.batchSize,\n    totalFiles: treeData.length,\n    sourceFilesCount: sourceFiles.length,\n    sourceFiles: sourceFiles,\n    filesByLanguage: filesByLanguage,\n    languageStats: languageStats,\n    repositoryUrl: `https://github.com/${owner}/${repo}`\n  }\n}];"
       },
-      "id": "7476a10c-368b-475d-8a02-74a9ca0c23b3",
+      "id": "1e3b0f57-31e9-4d08-a016-2365a40be898",
       "name": "Process File Structure",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-384, 336]
+      "position": [-2288, -272]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apply user-configured exclude patterns to the discovered sourceFiles\nconst repo = $('Process File Structure').first().json || {};\nconst config = $('Configuration').first().json || {};\n\n// Parse patterns (supports JSON array string, comma-separated string, and regex via 're:pattern' or '/pattern/flags')\nlet rawPatterns = [];\ntry {\n  const raw = config.excludePatterns;\n  if (Array.isArray(raw)) rawPatterns = raw;\n  else if (typeof raw === 'string') {\n    const s = raw.trim();\n    if (s.startsWith('[')) {\n      try { rawPatterns = JSON.parse(s); } catch (e) { rawPatterns = s.split(','); }\n    } else {\n      rawPatterns = s.split(',');\n    }\n  }\n} catch (e) { rawPatterns = []; }\n\nconst patterns = rawPatterns.map(p => {\n  try {\n    if (typeof p !== 'string') p = String(p);\n    const pp = p.trim();\n    if (!pp) return null;\n    // regex with re: prefix\n    if (pp.startsWith('re:')) {\n      try { return { type: 'regex', re: new RegExp(pp.slice(3), 'i') }; } catch (e) { return { type: 'string', value: pp.slice(3).toLowerCase() }; }\n    }\n    // regex with /.../flags style\n    if (pp.startsWith('/') && pp.lastIndexOf('/') > 0) {\n      const last = pp.lastIndexOf('/');\n      const body = pp.slice(1, last);\n      const flags = pp.slice(last + 1) || 'i';\n      try { return { type: 'regex', re: new RegExp(body, flags.includes('i') ? flags : flags + 'i') }; } catch (e) { return { type: 'string', value: pp.toLowerCase() }; }\n    }\n    return { type: 'string', value: pp.toLowerCase() };\n  } catch (e) { return null; }\n}).filter(Boolean);\n\nfunction matchesPattern(filePath, filename, filenameNoExt) {\n  if (!patterns || patterns.length === 0) return false;\n  for (const p of patterns) {\n    if (!p) continue;\n    if (p.type === 'regex') {\n      try {\n        if (p.re.test(filePath) || p.re.test(filename) || p.re.test(filenameNoExt)) return true;\n      } catch (e) { continue; }\n    } else {\n      if ((filePath || '').includes(p.value) || (filename || '').includes(p.value) || (filenameNoExt || '').includes(p.value)) return true;\n    }\n  }\n  return false;\n}\n\nconst originalFiles = repo.sourceFiles || [];\nconst filtered = originalFiles.filter(f => {\n  const path = (f.path || '').toLowerCase();\n  const filename = path.split('/').pop() || '';\n  const filenameNoExt = filename.indexOf('.') > -1 ? filename.substring(0, filename.lastIndexOf('.')) : filename;\n  return !matchesPattern(path, filename, filenameNoExt);\n});\n\nconst filesByLanguage = filtered.reduce((acc, file) => { if (!acc[file.language]) acc[file.language] = []; acc[file.language].push(file); return acc; }, {});\nconst languageStats = Object.entries(filesByLanguage).map(([lang, files]) => ({ language: lang, count: files.length, totalSize: files.reduce((s, f) => s + (f.size || 0), 0) }));\n\nreturn [{ json: { ...repo, sourceFilesCount: filtered.length, sourceFiles: filtered, filesByLanguage: filesByLanguage, languageStats: languageStats } }];"
+      },
+      "id": "417c1443-6e31-4b04-8877-618d09df792d",
+      "name": "Apply Exclude Patterns",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-2064, -272]
     },
     {
       "parameters": {
@@ -144,22 +160,22 @@
         },
         "options": {}
       },
-      "id": "b4a1e6f3-fa3b-4322-aa3e-de3fa12cae0d",
+      "id": "86b1c53d-f73e-4851-a0e9-b3389c235685",
       "name": "Route by Processing Mode",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [-160, 336]
+      "position": [-1840, -272]
     },
     {
       "parameters": {
         "fieldToSplitOut": "sourceFiles",
         "options": {}
       },
-      "id": "83dfbc98-8565-46e8-bba2-197139840afc",
+      "id": "2962daf4-f2ad-42b5-bb0f-dd1d6bded83b",
       "name": "Split Into Individual Files",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [64, 224]
+      "position": [-1616, -472]
     },
     {
       "parameters": {
@@ -168,11 +184,11 @@
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "8beccbb6-fcbf-42e9-aec6-c7908c099663",
+      "id": "c2742b69-915a-4fb3-b2d2-984d9d169c37",
       "name": "Fetch File Content",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [288, 224],
+      "position": [-1392, -472],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -184,11 +200,11 @@
       "parameters": {
         "jsCode": "// Decode base64 content and prepare for AI\nconst item = $input.first().json;\nconst fileInfo = $input.first().json;\n\nlet fileContent = '';\nif (item.content && item.encoding === 'base64') {\n  fileContent = Buffer.from(item.content, 'base64').toString('utf-8');\n}\n\nreturn [{\n  json: {\n    filePath: item.path,\n    fileName: item.name,\n    language: fileInfo.language,\n    size: item.size,\n    content: fileContent,\n    sha: item.sha,\n    owner: fileInfo.owner,\n    repo: fileInfo.repo\n  }\n}];"
       },
-      "id": "dd44966e-8807-4723-ad77-43b64fa71716",
+      "id": "77d66333-7452-48ce-9d2d-ee48e6ea5c91",
       "name": "Prepare Individual File",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [512, 224]
+      "position": [-1168, -472]
     },
     {
       "parameters": {
@@ -204,11 +220,11 @@
         },
         "options": {}
       },
-      "id": "f4076dde-978c-4633-8e13-284adac14944",
+      "id": "e2d3b542-f8ed-49b8-a27f-c6e9a7701462",
       "name": "Prepare Individual File Prompt",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [736, 224]
+      "position": [-944, -472]
     },
     {
       "parameters": {
@@ -216,29 +232,29 @@
         "text": "={{ $json.prompt }}",
         "options": {}
       },
-      "id": "98cbef4c-d8d5-41c2-9ef4-1a294b8f50e2",
+      "id": "3c2fb931-1901-4f38-a3d9-ff222b82ceb0",
       "name": "AI - Individual File Analysis",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.6,
-      "position": [960, 224]
+      "position": [-720, -576]
     },
     {
       "parameters": {},
-      "id": "9eb91874-7602-459d-a458-ab09d411675e",
+      "id": "8793bdb3-7d42-4608-9a42-cd9e1281841b",
       "name": "Merge All Results",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [1184, 336]
+      "position": [-368, -272]
     },
     {
       "parameters": {
         "jsCode": "// Prepare batch processing\nconst data = $input.first().json;\nconst batchSize = data.batchSize || 10;\nconst sourceFiles = data.sourceFiles;\n\n// Create batches\nconst batches = [];\nfor (let i = 0; i < sourceFiles.length; i += batchSize) {\n  batches.push({\n    batchNumber: Math.floor(i / batchSize) + 1,\n    files: sourceFiles.slice(i, i + batchSize),\n    owner: data.owner,\n    repo: data.repo,\n    branch: data.branch,\n    totalBatches: Math.ceil(sourceFiles.length / batchSize)\n  });\n}\n\nreturn batches.map(batch => ({ json: batch }));"
       },
-      "id": "ed953373-7293-42c6-a82e-c2d938e371f7",
+      "id": "f5c51ade-d2dd-49d0-9518-dbf6e8cebb85",
       "name": "Create Batches",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [64, 448]
+      "position": [-1168, -72]
     },
     {
       "parameters": {
@@ -254,11 +270,11 @@
         },
         "options": {}
       },
-      "id": "fb248f95-4415-4f5a-bf9f-f4eb8632099e",
+      "id": "178fa4ce-d00e-4b7e-88f2-e085f0dced35",
       "name": "Prepare Batch Prompt",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [288, 448]
+      "position": [-944, -72]
     },
     {
       "parameters": {
@@ -266,21 +282,21 @@
         "text": "={{ $json.batchPrompt }}",
         "options": {}
       },
-      "id": "c5566adb-a840-4703-ba64-79acc9938982",
+      "id": "8bc564d7-37a2-4b23-99c0-3d362da0d874",
       "name": "AI - Batch Analysis",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.6,
-      "position": [512, 448]
+      "position": [-720, -72]
     },
     {
       "parameters": {
-        "jsCode": "// Parse and aggregate batch results\nconst items = $input.all();\nconst repoInfo = $('Process File Structure').first().json;\n\nlet allTestCases = [];\nlet failedItems = [];\n\n// Helper function to convert JS template literals and Python triple quotes to valid JSON\nfunction normalizeToJSON(str) {\n  let normalized = str;\n  \n  // Remove markdown code fences\n  normalized = normalized.replace(/```json\\s*/g, '').replace(/```\\s*/g, '');\n  \n  // Find the array or object structure\n  const arrayMatch = normalized.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n  const targetStr = arrayMatch ? arrayMatch[0] : normalized;\n  \n  // Replace template literals (`...`) with proper JSON strings\n  // This regex finds backtick strings and converts them to double-quoted strings\n  let result = targetStr.replace(/`([^`]*)`/gs, (match, content) => {\n    // Escape special JSON characters in the content\n    const escaped = content\n      .replace(/\\\\/g, '\\\\\\\\')\n      .replace(/\"/g, '\\\\\"')\n      .replace(/\\n/g, '\\\\n')\n      .replace(/\\r/g, '\\\\r')\n      .replace(/\\t/g, '\\\\t');\n    return `\"${escaped}\"`;\n  });\n  \n  // Replace Python triple-quoted strings (\"\"\"...\"\"\") with proper JSON strings\n  result = result.replace(/\"\"\"([^\"]*)?\"\"\"/gs, (match, content) => {\n    const escaped = content\n      .replace(/\\\\/g, '\\\\\\\\')\n      .replace(/\"/g, '\\\\\"')\n      .replace(/\\n/g, '\\\\n')\n      .replace(/\\r/g, '\\\\r')\n      .replace(/\\t/g, '\\\\t');\n    return `\"${escaped}\"`;\n  });\n  \n  // Remove trailing commas before closing braces/brackets\n  result = result.replace(/,\\s*([\\]}])/g, '$1');\n  \n  // Ensure property names are double-quoted\n  result = result.replace(/([{,]\\s*)([a-zA-Z_][a-zA-Z0-9_]*)\\s*:/g, '$1\"$2\":');\n  \n  return result;\n}\n\nitems.forEach((item, itemIndex) => {\n  let output = item.json.output;\n  \n  let testCases;\n  try {\n    // If already an object, use it directly\n    if (typeof output === 'object' && output !== null) {\n      testCases = output;\n    } else if (typeof output === 'string') {\n      // Strategy 1: Try direct JSON parse\n      try {\n        testCases = JSON.parse(output);\n      } catch (parseError) {\n        // Strategy 2: Normalize template literals and triple quotes, then parse\n        try {\n          const normalized = normalizeToJSON(output);\n          testCases = JSON.parse(normalized);\n        } catch (normalizeError) {\n          // Strategy 3: Try to use eval as last resort for JS object literals\n          try {\n            // Extract just the array/object part\n            let cleaned = output.replace(/```json\\s*/g, '').replace(/```\\s*/g, '');\n            const arrayMatch = cleaned.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n            if (arrayMatch) {\n              // Wrap in parentheses and eval to parse JS object literal\n              testCases = eval(`(${arrayMatch[0]})`);\n            } else {\n              const objectMatch = cleaned.match(/{[\\s\\S]*}/);\n              if (objectMatch) {\n                testCases = eval(`(${objectMatch[0]})`);\n              } else {\n                throw new Error('No valid JSON or JS object pattern found');\n              }\n            }\n          } catch (evalError) {\n            console.error(`Failed to parse item ${itemIndex}:`, evalError.message);\n            failedItems.push({ \n              itemIndex, \n              error: evalError.message, \n              output: output.substring(0, 500),\n              parseAttempts: ['JSON.parse', 'normalizeToJSON', 'eval']\n            });\n            testCases = [];\n          }\n        }\n      }\n    } else {\n      testCases = [];\n    }\n  } catch (e) {\n    console.error(`Error processing item ${itemIndex}:`, e.message);\n    failedItems.push({ itemIndex, error: e.message });\n    testCases = [];\n  }\n  \n  // Ensure testCases is an array\n  if (!Array.isArray(testCases)) {\n    testCases = testCases ? [testCases] : [];\n  }\n  \n  allTestCases = allTestCases.concat(testCases);\n});\n\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  processingMode: repoInfo.processingMode,\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: allTestCases.length,\n    generatedAt: new Date().toISOString(),\n    batchesProcessed: items.length,\n    failedItems: failedItems.length,\n    successfulItems: items.length - failedItems.length\n  },\n  testFiles: allTestCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    language: tc.language,\n    testFileContent: tc.testFileContent || '',\n    dependencies: tc.dependencies || [],\n    coverage: tc.coverage || {},\n    runCommand: tc.runCommand || '',\n    notes: tc.notes || ''\n  })),\n  errors: failedItems.length > 0 ? failedItems : undefined\n};\n\nreturn [{ json: formattedOutput }];"
+        "jsCode": "// Parse and aggregate batch results\nconst items = $input.all();\nconst repoInfo = $('Apply Exclude Patterns').first().json;\n\nlet allTestCases = [];\nlet failedItems = [];\n\n// Helper function to convert JS template literals and Python triple quotes to valid JSON\nfunction normalizeToJSON(str) {\n  let normalized = str;\n  \n  // Remove markdown code fences\n  normalized = normalized.replace(/```json\\s*/g, '').replace(/```\\s*/g, '');\n  \n  // Find the array or object structure\n  const arrayMatch = normalized.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n  const targetStr = arrayMatch ? arrayMatch[0] : normalized;\n  \n  // Replace template literals (`...`) with proper JSON strings\n  // This regex finds backtick strings and converts them to double-quoted strings\n  let result = targetStr.replace(/`([^`]*)`/gs, (match, content) => {\n    // Escape special JSON characters in the content\n    const escaped = content\n      .replace(/\\\\/g, '\\\\\\\\')\n      .replace(/\"/g, '\\\\\"')\n      .replace(/\\n/g, '\\\\n')\n      .replace(/\\r/g, '\\\\r')\n      .replace(/\\t/g, '\\\\t');\n    return `\"${escaped}\"`;\n  });\n  \n  // Replace Python triple-quoted strings (\"\"\"...\"\"\") with proper JSON strings\n  result = result.replace(/\"\"\"([^\"]*)?\"\"\"/gs, (match, content) => {\n    const escaped = content\n      .replace(/\\\\/g, '\\\\\\\\')\n      .replace(/\"/g, '\\\\\"')\n      .replace(/\\n/g, '\\\\n')\n      .replace(/\\r/g, '\\\\r')\n      .replace(/\\t/g, '\\\\t');\n    return `\"${escaped}\"`;\n  });\n  \n  // Remove trailing commas before closing braces/brackets\n  result = result.replace(/,\\s*([\\]}])/g, '$1');\n  \n  // Ensure property names are double-quoted\n  result = result.replace(/([{,]\\s*)([a-zA-Z_][a-zA-Z0-9_]*)\\s*:/g, '$1\"$2\":');\n  \n  return result;\n}\n\nitems.forEach((item, itemIndex) => {\n  let output = item.json.output;\n  \n  let testCases;\n  try {\n    // If already an object, use it directly\n    if (typeof output === 'object' && output !== null) {\n      testCases = output;\n    } else if (typeof output === 'string') {\n      // Strategy 1: Try direct JSON parse\n      try {\n        testCases = JSON.parse(output);\n      } catch (parseError) {\n        // Strategy 2: Normalize template literals and triple quotes, then parse\n        try {\n          const normalized = normalizeToJSON(output);\n          testCases = JSON.parse(normalized);\n        } catch (normalizeError) {\n          // Strategy 3: Try to use eval as last resort for JS object literals\n          try {\n            // Extract just the array/object part\n            let cleaned = output.replace(/```json\\s*/g, '').replace(/```\\s*/g, '');\n            const arrayMatch = cleaned.match(/\\[\\s*{[\\s\\S]*}\\s*\\]/);\n            if (arrayMatch) {\n              // Wrap in parentheses and eval to parse JS object literal\n              testCases = eval(`(${arrayMatch[0]})`);\n            } else {\n              const objectMatch = cleaned.match(/{[\\s\\S]*}/);\n              if (objectMatch) {\n                testCases = eval(`(${objectMatch[0]})`);\n              } else {\n                throw new Error('No valid JSON or JS object pattern found');\n              }\n            }\n          } catch (evalError) {\n            console.error(`Failed to parse item ${itemIndex}:`, evalError.message);\n            failedItems.push({ \n              itemIndex, \n              error: evalError.message, \n              output: output.substring(0, 500),\n              parseAttempts: ['JSON.parse', 'normalizeToJSON', 'eval']\n            });\n            testCases = [];\n          }\n        }\n      }\n    } else {\n      testCases = [];\n    }\n  } catch (e) {\n    console.error(`Error processing item ${itemIndex}:`, e.message);\n    failedItems.push({ itemIndex, error: e.message });\n    testCases = [];\n  }\n  \n  // Ensure testCases is an array\n  if (!Array.isArray(testCases)) {\n    testCases = testCases ? [testCases] : [];\n  }\n  \n  allTestCases = allTestCases.concat(testCases);\n});\n\nconst formattedOutput = {\n  repository: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    branch: repoInfo.branch,\n    url: repoInfo.repositoryUrl\n  },\n  processingMode: repoInfo.processingMode,\n  summary: {\n    totalSourceFiles: repoInfo.sourceFilesCount,\n    filesAnalyzed: allTestCases.length,\n    generatedAt: new Date().toISOString(),\n    batchesProcessed: items.length,\n    failedItems: failedItems.length,\n    successfulItems: items.length - failedItems.length\n  },\n  testFiles: allTestCases.map((tc, index) => ({\n    id: index + 1,\n    sourceFile: tc.sourceFile,\n    testFile: tc.testFile,\n    framework: tc.framework || 'jest',\n    language: tc.language,\n    testFileContent: tc.testFileContent || '',\n    dependencies: tc.dependencies || [],\n    coverage: tc.coverage || {},\n    runCommand: tc.runCommand || '',\n    notes: tc.notes || ''\n  })),\n  errors: failedItems.length > 0 ? failedItems : undefined\n};\n\nreturn [{ json: formattedOutput }];"
       },
-      "id": "ce25794e-0101-4d48-9762-0aac4abe8c2f",
+      "id": "9455f8a8-1af1-4c55-9f83-ba0382732480",
       "name": "Format Final Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1408, 336]
+      "position": [-144, -272]
     },
     {
       "parameters": {
@@ -289,21 +305,21 @@
           "fileName": "=github-test-cases-{{ $json.repository.repo }}-{{ $json.processingMode }}-{{ $now.format('yyyy-MM-dd-HHmmss') }}.json"
         }
       },
-      "id": "3a19d7d4-f2ea-4c14-ba29-14a51aee94d7",
+      "id": "40e939c3-1156-49b0-97a4-255906ad4739",
       "name": "Export to JSON File",
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
-      "position": [1632, 336]
+      "position": [80, -368]
     },
     {
       "parameters": {
         "jsCode": "// Attach repository context and prepare branch check\nconst formatted = $input.first().json;\nconst repo = formatted.repository || {};\nconst config = $('Configuration').first().json;\nconst testFiles = formatted.testFiles || [];\nconst enriched = testFiles.map(tf => ({ ...tf, owner: tf.owner || repo.owner, repo: tf.repo || repo.repo, branch: tf.branch || repo.branch }));\n\nreturn [{ json: { \n  testFiles: enriched,\n  owner: repo.owner,\n  repo: repo.repo,\n  testBranch: config.testBranch,\n  sourceBranch: config.branch,\n  checkBranchUrl: `https://api.github.com/repos/${repo.owner}/${repo.repo}/branches/${config.testBranch}`\n} }];"
       },
-      "id": "eaddaa86-e922-4cda-899a-f31c0a9da80d",
+      "id": "c4c370ae-d93d-498f-90ba-35a9b8c89a4d",
       "name": "Attach Repo Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1552, 512]
+      "position": [80, -176]
     },
     {
       "parameters": {
@@ -314,11 +330,11 @@
           "allowUnauthorizedCerts": false
         }
       },
-      "id": "1b767d5e-aa7f-467f-a6e6-f932e582293b",
+      "id": "086fe40d-84b5-4540-80b0-642b9512e60e",
       "name": "Check Test Branch Once",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1776, 512],
+      "position": [304, -176],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -331,11 +347,11 @@
       "parameters": {
         "jsCode": "// Check if branch exists\nconst branchCheckResult = $input.first().json;\nconst repoContext = $('Attach Repo Context').first().json;\n\nconst hasError = branchCheckResult.error !== undefined;\nconst statusCode = branchCheckResult.statusCode || (hasError ? 404 : 200);\nconst branchExists = !hasError && statusCode === 200;\n\nreturn [{\n  json: {\n    ...repoContext,\n    branchExists: branchExists,\n    statusCode: statusCode\n  }\n}];"
       },
-      "id": "bce69f8b-0a00-4d3f-bea7-58ec7c15443e",
+      "id": "836913d8-bfcc-4b80-91bc-db61a15f66eb",
       "name": "Process Branch Check",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 512]
+      "position": [528, -176]
     },
     {
       "parameters": {
@@ -361,11 +377,11 @@
         },
         "options": {}
       },
-      "id": "36db93b2-6820-47b5-9b47-abcaf5bac0c1",
+      "id": "3e3858fe-8758-4e35-95e7-2825fc384899",
       "name": "Need to Create Branch?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2224, 512]
+      "position": [752, -176]
     },
     {
       "parameters": {
@@ -374,11 +390,11 @@
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "7bbd6bf6-29d2-44f5-9bde-3d678bc1d5d0",
+      "id": "60ae5ac2-e587-40e6-9af9-8d3b4e4f4640",
       "name": "Get Source SHA Once",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2448, 400],
+      "position": [976, -272],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -397,11 +413,11 @@
         "jsonBody": "={{ JSON.stringify({ ref: 'refs/heads/' + $('Process Branch Check').first().json.testBranch, sha: $json.object.sha }) }}",
         "options": {}
       },
-      "id": "abe9f8de-f752-4e6d-8db9-0095ce67b677",
+      "id": "2188301f-0a24-486e-9ad4-f55511ef7d9f",
       "name": "Create Branch Once",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2672, 400],
+      "position": [1200, -272],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -413,70 +429,60 @@
       "parameters": {
         "jsCode": "// Pass through the test files for splitting\nconst repoContext = $('Process Branch Check').first().json;\nreturn [{ json: repoContext }];"
       },
-      "id": "9bde4d89-0ee0-4e21-94a3-5075e64ed7cf",
+      "id": "07eaf886-e8ac-499f-9871-b07a1155601f",
       "name": "Pass Through After Creation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2896, 400]
+      "position": [1424, -272]
     },
     {
       "parameters": {
         "jsCode": "// Pass through the test files for splitting (branch already exists)\nconst repoContext = $input.first().json;\nreturn [{ json: repoContext }];"
       },
-      "id": "67c0b57a-d4e7-46ee-a377-55e6802aa0a4",
+      "id": "83589dd5-e623-4886-bfe8-7964fa6dfadb",
       "name": "Pass Through Existing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2448, 624]
+      "position": [1424, -80]
     },
     {
       "parameters": {},
-      "id": "9c24bf03-49b3-4081-a9c6-3d6784ebad81",
+      "id": "4bf1ae50-8ae1-43f4-b83e-152251ef69b5",
       "name": "Merge Branch Ready",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [3120, 512]
+      "position": [1648, -176]
     },
     {
       "parameters": {
         "jsCode": "// Debug: Check testFiles array before split\nconst item = $input.first().json;\nconsole.log('=== BEFORE SPLIT DEBUG ===');\nconsole.log('Has testFiles:', !!item.testFiles);\nconsole.log('testFiles is array:', Array.isArray(item.testFiles));\nconsole.log('testFiles length:', item.testFiles ? item.testFiles.length : 0);\nif (item.testFiles && item.testFiles.length > 0) {\n  console.log('First test file:', item.testFiles[0].sourceFile);\n  console.log('Last test file:', item.testFiles[item.testFiles.length - 1].sourceFile);\n}\nreturn $input.all();"
       },
-      "id": "22a2d224-a0ff-4184-8e1b-afe6c53c3fc3",
+      "id": "902187c3-152d-45aa-a130-c030d3d45209",
       "name": "Debug Before Split",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3232, 512]
+      "position": [1872, -176]
     },
     {
       "parameters": {
         "fieldToSplitOut": "testFiles",
         "options": {}
       },
-      "id": "6270b1f5-5ba7-4f3a-9ad5-12d40be1adc6",
+      "id": "1136cc6e-2bdb-4c51-9eb3-7de033228f36",
       "name": "Split Test Files",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [3344, 512]
+      "position": [2096, -176]
     },
     {
       "parameters": {
         "jsCode": "// Debug: Log what we received after split - process ALL items\nconst items = $input.all();\nconsole.log('=== SPLIT ITEM DEBUG ===');\nconsole.log('Total items after split:', items.length);\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i].json;\n  console.log(`\\n--- Item ${i + 1} ---`);\n  console.log('Item keys:', Object.keys(item));\n  console.log('Source file:', item.sourceFile);\n  console.log('Test file:', item.testFile);\n  console.log('Has testFileContent:', !!item.testFileContent);\n  console.log('Content length:', item.testFileContent ? item.testFileContent.length : 0);\n}\n\n// Return ALL items\nreturn items;"
       },
-      "id": "f4a3102d-ce79-4038-86aa-17de5c3d58c2",
+      "id": "ec31b6ea-96c0-4dc7-98fe-3590e8585f5f",
       "name": "Debug Split Item",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3568, 512]
-    },
-    {
-      "parameters": {
-        "operation": "text"
-      },
-      "id": "7e6a347c-c261-4e00-905b-abc94f1835b5",
-      "name": "Create Test File",
-      "type": "n8n-nodes-base.convertToFile",
-      "typeVersion": 1.1,
-      "position": [1856, 544]
+      "position": [2320, -176]
     },
     {
       "parameters": {
@@ -492,32 +498,32 @@
         },
         "options": {}
       },
-      "id": "998cda1d-c2d7-4c26-88da-294227fbf78c",
+      "id": "6aeb67e6-4ff9-4131-9624-b23efa94b668",
       "name": "Prepare Test File Content",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1856, 656]
+      "position": [2544, -176]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "// Prepare commit payload for GitHub - process current item\nconst item = $input.item.json || {};\nconst content = item.testFileContent || item.data || '';\nconst config = $('Configuration').first().json;\n\n// Helper function to extract component/module name from test content\nfunction extractSourceNameFromContent(content, language) {\n  if (!content) return null;\n  \n  // For JavaScript/TypeScript: look for import statements or describe blocks\n  if (language === 'javascript' || language === 'typescript' || !language) {\n    // Try to find: import ComponentName from '...'\n    const importMatch = content.match(/import\\s+(\\w+)\\s+from\\s+['\"][^'\"]+['\"]/m);\n    if (importMatch && importMatch[1] && importMatch[1] !== 'React' && importMatch[1] !== 'pytest') {\n      return importMatch[1];\n    }\n    \n    // Try to find: describe('ComponentName', ...)\n    const describeMatch = content.match(/describe\\(['\"]([\\w]+)['\"]/m);\n    if (describeMatch && describeMatch[1]) {\n      return describeMatch[1];\n    }\n  }\n  \n  // For Python: look for import statements or class/function names\n  if (language === 'python') {\n    // Try to find: from module.submodule import ClassName\n    const fromImportMatch = content.match(/from\\s+[\\w.]+\\s+import\\s+(\\w+)/m);\n    if (fromImportMatch && fromImportMatch[1] && fromImportMatch[1] !== '*') {\n      return fromImportMatch[1];\n    }\n    \n    // Try to find: import module.ClassName\n    const importMatch = content.match(/import\\s+([\\w.]+)/m);\n    if (importMatch && importMatch[1]) {\n      const parts = importMatch[1].split('.');\n      return parts[parts.length - 1];\n    }\n  }\n  \n  return null;\n}\n\n// Determine the target path and filename\nlet targetPath = '';\nlet sourceFile = item.sourceFile || '';\nconst language = item.language || 'javascript';\n\n// If sourceFile is empty, try to extract it from test content\nif (!sourceFile || !sourceFile.trim()) {\n  const extractedName = extractSourceNameFromContent(content, language);\n  if (extractedName) {\n    // Build a reasonable source file path based on extracted name\n    if (language === 'python') {\n      sourceFile = extractedName.toLowerCase() + '.py';\n    } else if (language === 'typescript') {\n      sourceFile = extractedName + '.tsx';\n    } else {\n      sourceFile = extractedName + '.js';\n    }\n  }\n}\n\n// Strategy 1: Use testFile if provided by AI (already includes full path)\nif (item.testFile && item.testFile.trim() && !item.testFile.includes('generated_test_')) {\n  targetPath = item.testFile;\n  // Extract sourceFile from testFile if not provided\n  if (!sourceFile) {\n    const testFileName = targetPath.split('/').pop();\n    sourceFile = testFileName.replace(/\\.(test|spec)/, '').replace(/^test[_-]/, '');\n  }\n} \n// Strategy 2: Build from sourceFile\nelse if (sourceFile && sourceFile.trim()) {\n  const pathParts = sourceFile.split('/');\n  const fileName = pathParts[pathParts.length - 1];\n  \n  // Determine test file extension based on language or source extension\n  const sourceExt = fileName.substring(fileName.lastIndexOf('.'));\n  \n  // Map languages to test file extensions\n  const testExtMap = {\n    'typescript': '.test.ts',\n    'javascript': '.test.js',\n    'python': '_test.py',\n    'java': 'Test.java',\n    'go': '_test.go',\n    'ruby': '_spec.rb',\n    'php': 'Test.php'\n  };\n  \n  let testExt = testExtMap[language] || '.test' + sourceExt;\n  \n  // For TypeScript/JavaScript React files\n  if (sourceExt === '.tsx') testExt = '.test.tsx';\n  else if (sourceExt === '.jsx') testExt = '.test.jsx';\n  else if (sourceExt === '.ts') testExt = '.test.ts';\n  else if (sourceExt === '.js') testExt = '.test.js';\n  else if (sourceExt === '.py') testExt = '_test.py';\n  \n  // Remove original extension and add test suffix\n  const dotIndex = fileName.lastIndexOf('.');\n  const nameWithoutExt = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;\n  \n  // Build test filename\n  let testFileName;\n  if (language === 'python') {\n    testFileName = `test_${nameWithoutExt}.py`;\n  } else if (language === 'java') {\n    testFileName = `${nameWithoutExt}Test.java`;\n  } else {\n    testFileName = `${nameWithoutExt}${testExt}`;\n  }\n  \n  // Build full path: tests/auto-generated/{language}/{testFileName}\n  targetPath = `tests/auto-generated/${language}/${testFileName}`;\n} \n// Strategy 3: Generate unique filename as fallback\nelse {\n  const timestamp = Date.now();\n  const randomSuffix = Math.random().toString(36).substring(2, 15);\n  const ext = language === 'python' ? '.py' : language === 'typescript' ? '.ts' : '.js';\n  const testFileName = `generated_test_${timestamp}_${randomSuffix}${ext}`;\n  targetPath = `tests/auto-generated/${language}/${testFileName}`;\n  sourceFile = testFileName;\n}\n\n// Base64 encode the content\nconst contentBase64 = Buffer.from(content, 'utf8').toString('base64');\n\n// Get owner/repo from item\nconst owner = item.owner || config.owner || 'unknown-owner';\nconst repo = item.repo || config.repo || 'unknown-repo';\nconst branch = config.testBranch;  // Use test branch directly\n\n// Extract filename for commit message and local export\nconst pathParts = targetPath.split('/');\nconst localFileName = pathParts[pathParts.length - 1];\nconst commitMessage = `chore(tests): add auto-generated test for ${sourceFile || localFileName}`;\n\n// Return data for both GitHub commit and local file creation\nreturn { json: { owner, repo, branch, targetPath, contentBase64, commitMessage, testFile: targetPath, testFileContent: content, data: content, localFileName, sourceFile } };"
       },
-      "id": "56b53e87-fe4d-44ee-bb17-37695b3064d8",
+      "id": "4cb50215-ead6-4fb2-891a-84c5edd86855",
       "name": "Prepare Git Commit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2096, 656]
+      "position": [2768, -176]
     },
     {
       "parameters": {
         "jsCode": "// Preserve commit data and prepare for branch check\nconst commitData = $input.first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    ...commitData,\n    testBranch: config.testBranch,\n    checkBranchUrl: `https://api.github.com/repos/${commitData.owner}/${commitData.repo}/branches/${config.testBranch}`\n  }\n}];"
       },
-      "id": "428bfa6a-29ad-4746-97ff-0fd1f06873b1",
+      "id": "374fc72e-7d73-4561-964b-a05ce60bc206",
       "name": "Preserve Commit Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2320, 656]
+      "position": [976, 208]
     },
     {
       "parameters": {
@@ -528,11 +534,11 @@
           "allowUnauthorizedCerts": false
         }
       },
-      "id": "c0382f9e-2dcf-4606-841c-d0570e458c17",
+      "id": "76bb8385-b398-4d92-ac67-3b3ebfa54a8a",
       "name": "Check If Test Branch Exists",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2544, 656],
+      "position": [1200, 208],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -545,11 +551,11 @@
       "parameters": {
         "jsCode": "// Merge the branch check result with commit data\nconst branchCheckResult = $input.first().json;\nconst commitData = $('Preserve Commit Data').first().json;\n\n// Check if the request failed (error property exists) or succeeded\nconst hasError = branchCheckResult.error !== undefined;\nconst statusCode = branchCheckResult.statusCode || (hasError ? 404 : 200);\nconst branchExists = !hasError && statusCode === 200;\n\nreturn [{\n  json: {\n    ...commitData,\n    branchExists: branchExists,\n    statusCode: statusCode\n  }\n}];"
       },
-      "id": "44d82f55-5026-496a-ae1f-bdc188e58533",
+      "id": "4e7a1cd5-76cb-4104-80a6-571047e04a0b",
       "name": "Merge Branch Check Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2768, 656]
+      "position": [1424, 208]
     },
     {
       "parameters": {
@@ -575,21 +581,21 @@
         },
         "options": {}
       },
-      "id": "beb75285-11f6-4314-83f2-3fa6ff20a2f1",
+      "id": "4ef789c6-be89-4dac-82d2-863c9302a734",
       "name": "Branch Exists?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2992, 656]
+      "position": [1648, 208]
     },
     {
       "parameters": {
         "jsCode": "// Get the latest commit SHA from the main branch to create new branch from it\nconst data = $input.first().json;\nconst prepareCommitData = $('Prepare Git Commit').first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    owner: prepareCommitData.owner,\n    repo: prepareCommitData.repo,\n    sourceBranch: config.branch,\n    testBranch: config.testBranch,\n    ...prepareCommitData\n  }\n}];"
       },
-      "id": "2f52d5de-1b4d-48b5-9ee4-46ca1f6d0863",
+      "id": "fba4932e-2d8e-4bc1-a8a4-4103f9f6d61c",
       "name": "Prepare Branch Creation Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3216, 544]
+      "position": [1872, 112]
     },
     {
       "parameters": {
@@ -598,11 +604,11 @@
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "f1da6fab-c273-49ed-963e-62edbf33ad99",
+      "id": "f0388cdf-2947-410c-aade-d4cf4d45ef74",
       "name": "Get Source Branch SHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3440, 544],
+      "position": [2096, 112],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -621,11 +627,11 @@
         "jsonBody": "={{ JSON.stringify({ ref: 'refs/heads/' + $('Prepare Branch Creation Data').first().json.testBranch, sha: $json.object.sha }) }}",
         "options": {}
       },
-      "id": "fd77ea64-5ddf-47fc-997f-53e91293c678",
+      "id": "3786340b-bddf-4a50-b419-3dbfb151381b",
       "name": "Create Test Branch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3664, 544],
+      "position": [2320, 112],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -637,53 +643,52 @@
       "parameters": {
         "jsCode": "// Merge the branch creation result with the commit data\nconst prepareCommitData = $('Prepare Git Commit').first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    ...prepareCommitData,\n    branch: config.testBranch  // Override branch to use test branch\n  }\n}];"
       },
-      "id": "3bbb028b-15e7-43ac-af2a-f80fada70b91",
+      "id": "438600db-8491-40a4-aa41-72db165c4a81",
       "name": "Set Test Branch for Commit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3888, 544]
+      "position": [2544, 112]
     },
     {
       "parameters": {
         "jsCode": "// For existing branch, just pass through with test branch override\nconst prepareCommitData = $('Preserve Commit Data').first().json;\nconst config = $('Configuration').first().json;\n\nreturn [{\n  json: {\n    ...prepareCommitData,\n    branch: config.testBranch  // Override branch to use test branch\n  }\n}];"
       },
-      "id": "cc75d3c3-9c9f-4862-a302-45a966b27957",
+      "id": "b3ee0fd5-ad7e-46e7-8cf7-e8f05a87d756",
       "name": "Use Existing Test Branch",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3216, 768]
+      "position": [2544, 304]
     },
     {
       "parameters": {},
-      "id": "0ef9b13a-187d-4860-a147-1262794efec7",
+      "id": "42b62d09-5dc4-4e36-820b-273a54183fca",
       "name": "Merge Branch Paths",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [4112, 656]
+      "position": [2768, 208]
     },
     {
       "parameters": {
         "jsCode": "// Collect all test files and prepare for bulk commit using GitHub Tree API\nconst items = $input.all();\n\nconsole.log('=== AGGREGATE ALL TEST FILES DEBUG ===');\nconsole.log('Total items received:', items.length);\n\nif (items.length === 0) {\n  throw new Error('No items to commit');\n}\n\nconst firstItem = items[0].json;\nconsole.log('First item keys:', Object.keys(firstItem));\nconsole.log('First item owner:', firstItem.owner);\nconsole.log('First item targetPath:', firstItem.targetPath);\nconsole.log('First item has contentBase64:', !!firstItem.contentBase64);\n\n// Group files by owner/repo/branch\nconst owner = firstItem.owner;\nconst repo = firstItem.repo;\nconst branch = firstItem.branch;\n\n// Prepare tree entries for all files\nconst treeEntries = items.map((item, index) => {\n  const data = item.json;\n  console.log(`Item ${index}: path=${data.targetPath}, hasContent=${!!data.contentBase64}`);\n  \n  // Decode base64 content to UTF-8 for GitHub API\n  const content = data.contentBase64 \n    ? Buffer.from(data.contentBase64, 'base64').toString('utf-8')\n    : data.testFileContent || data.data || '';\n  \n  return {\n    path: data.targetPath,\n    mode: '100644',  // Regular file\n    type: 'blob',\n    content: content\n  };\n});\n\nconst commitMessage = `chore(tests): add ${items.length} auto-generated test files\\n\\nGenerated tests for:\\n${items.map(item => `- ${item.json.localFileName || item.json.sourceFile || 'unknown'}`).join('\\n')}`;\n\nconsole.log('Commit message:', commitMessage);\nconsole.log('Tree entries count:', treeEntries.length);\n\nreturn [{\n  json: {\n    owner,\n    repo,\n    branch,\n    treeEntries,\n    commitMessage,\n    fileCount: items.length,\n    files: items.map(item => item.json.targetPath)\n  }\n}];"
       },
-      "id": "aggregate-all-files-001",
+      "id": "de38ab66-d314-4fd7-931b-0e33b6af689f",
       "name": "Aggregate All Test Files",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [4672, 656]
+      "position": [2992, 16]
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/git/ref/heads/{{ $json.branch }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "get-branch-ref-bulk-001",
+      "id": "87407141-43c4-4b4b-a60f-742c85ee01af",
       "name": "Get Branch Reference",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [5120, 656],
+      "position": [3216, 16],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -695,25 +700,24 @@
       "parameters": {
         "jsCode": "// Extract base tree SHA from branch reference\nconst response = $input.first().json;\nconst commitData = $('Aggregate All Test Files').first().json;\n\nreturn [{\n  json: {\n    ...commitData,\n    baseCommitSha: response.object.sha\n  }\n}];"
       },
-      "id": "extract-base-commit-001",
+      "id": "3d092ec1-d644-45d0-b38c-f108bbe4cf2c",
       "name": "Extract Base Commit SHA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [5344, 656]
+      "position": [3440, 16]
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/git/commits/{{ $json.baseCommitSha }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "options": {}
       },
-      "id": "get-base-tree-001",
+      "id": "0ca6bb93-24e1-47f8-ac49-673859f35372",
       "name": "Get Base Tree",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [5568, 656],
+      "position": [3664, 16],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -725,11 +729,11 @@
       "parameters": {
         "jsCode": "// Extract tree SHA and prepare for creating new tree\nconst commitInfo = $input.first().json;\nconst bulkData = $('Extract Base Commit SHA').first().json;\n\nreturn [{\n  json: {\n    ...bulkData,\n    baseTreeSha: commitInfo.tree.sha\n  }\n}];"
       },
-      "id": "extract-tree-sha-001",
+      "id": "ff5fd377-5123-418a-8e5a-b9034b70d9f5",
       "name": "Extract Tree SHA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [5792, 656]
+      "position": [3888, 16]
     },
     {
       "parameters": {
@@ -742,11 +746,11 @@
         "jsonBody": "={{ JSON.stringify({ base_tree: $json.baseTreeSha, tree: $json.treeEntries }) }}",
         "options": {}
       },
-      "id": "create-tree-001",
+      "id": "ee46b9a4-83ce-4e3b-beca-e1721627a771",
       "name": "Create Git Tree",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6016, 656],
+      "position": [4112, 16],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -758,11 +762,11 @@
       "parameters": {
         "jsCode": "// Prepare commit with new tree\nconst treeResponse = $input.first().json;\nconst bulkData = $('Extract Tree SHA').first().json;\n\nreturn [{\n  json: {\n    ...bulkData,\n    newTreeSha: treeResponse.sha\n  }\n}];"
       },
-      "id": "prepare-commit-data-001",
+      "id": "9802fb01-4ecb-4da4-9107-f686f63b1be2",
       "name": "Prepare Commit Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [6240, 656]
+      "position": [4336, 16]
     },
     {
       "parameters": {
@@ -775,11 +779,11 @@
         "jsonBody": "={{ JSON.stringify({ message: $json.commitMessage, tree: $json.newTreeSha, parents: [$json.baseCommitSha] }) }}",
         "options": {}
       },
-      "id": "create-commit-001",
+      "id": "d851c78f-3b62-49e8-bda4-b7b6801ed97a",
       "name": "Create Commit",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6464, 656],
+      "position": [4560, 16],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -791,11 +795,11 @@
       "parameters": {
         "jsCode": "// Extract commit SHA for updating branch reference\nconst commitResponse = $input.first().json;\nconst bulkData = $('Prepare Commit Data').first().json;\n\nreturn [{\n  json: {\n    ...bulkData,\n    newCommitSha: commitResponse.sha\n  }\n}];"
       },
-      "id": "extract-commit-sha-001",
+      "id": "b461c86a-e497-47c6-9dce-6004bd2e885a",
       "name": "Extract Commit SHA",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [6688, 656]
+      "position": [4784, 16]
     },
     {
       "parameters": {
@@ -808,11 +812,11 @@
         "jsonBody": "={{ JSON.stringify({ sha: $json.newCommitSha, force: false }) }}",
         "options": {}
       },
-      "id": "update-branch-ref-001",
+      "id": "fdb4bb10-8af5-4679-a733-1152130f9882",
       "name": "Update Branch Reference",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [6912, 656],
+      "position": [5008, 16],
       "credentials": {
         "githubApi": {
           "id": "74FBfZyE3yFXYmu7",
@@ -827,11 +831,11 @@
           "temperature": 0.3
         }
       },
-      "id": "03fccbc8-a5d0-4c0a-8554-7083a17e358c",
+      "id": "a5975125-056d-417c-bb00-3508cf622029",
       "name": "AWS Bedrock - Individual",
       "type": "@n8n/n8n-nodes-langchain.lmChatAwsBedrock",
       "typeVersion": 1,
-      "position": [960, 480],
+      "position": [-648, -352],
       "credentials": {
         "aws": {
           "id": "bYwD2zosP6YYHz0J",
@@ -846,11 +850,11 @@
           "temperature": 0.3
         }
       },
-      "id": "b5fa8c3c-637e-4e1e-b854-9457d31e4135",
+      "id": "80af4751-2dce-4ac5-b0ee-d6763852e561",
       "name": "AWS Bedrock - Batch",
       "type": "@n8n/n8n-nodes-langchain.lmChatAwsBedrock",
       "typeVersion": 1,
-      "position": [512, 656],
+      "position": [-648, 152],
       "credentials": {
         "aws": {
           "id": "bYwD2zosP6YYHz0J",
@@ -906,6 +910,17 @@
       ]
     },
     "Process File Structure": {
+      "main": [
+        [
+          {
+            "node": "Apply Exclude Patterns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Exclude Patterns": {
       "main": [
         [
           {
@@ -1426,17 +1441,6 @@
         ]
       ]
     },
-    "Create/Update File on GitHub": {
-      "main": [
-        [
-          {
-            "node": "Create Test File",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "AWS Bedrock - Batch": {
       "ai_languageModel": [
         [
@@ -1464,7 +1468,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "6c1a19ae-de5c-492a-8837-023b31ee5ed3",
+  "versionId": "7f326225-15df-46fc-812f-742867ba0ef6",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "e19bcd79288ba32d5b00c6bcd097856e2fdca4230440ae71d65e560d4587140f"
